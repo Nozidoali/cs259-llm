@@ -1,0 +1,54 @@
+# Models
+models/
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+
+# Data
+data/
+*.csv
+*.json
+*.parquet
+
+# Hugging Face cache
+.cache/
+huggingface/
+transformers_cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Training outputs
+checkpoint-*/
+runs/
+wandb/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
