@@ -54,3 +54,6 @@ wandb/
 .ipynb_checkpoints/
 *.ipynb
 
+
+prompt_files/
+qmsum_outputs/

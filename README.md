@@ -1,89 +1,57 @@
-# CS259 - GPT-2 Fine-tuning on TruthfulQA
-
-Fine-tune GPT-2 Small on TruthfulQA dataset and convert to GGUF format for edge deployment.
+# CS259 - Qwen2 Fine-tuning and LongBench Evaluation
 
 ## Setup
 
-1. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Configure paths:**
-   Edit `config.py` to adjust paths and training parameters.
+```bash
+pip install -r requirements.txt
+```
 
 ## Usage
 
-### Fine-tune GPT-2 on TruthfulQA
+### Fine-tune Qwen2 Models
 
 ```bash
-python main.py
+# Custom training parameters
+python finetune.py --model qwen2-0.5b \
+    --num-epochs 5 \
+    --batch-size 2 \
+    --learning-rate 2e-5 \
+    --max-length 2048 \
+    --use-bleurt
 ```
-
-This will:
-- Download GPT-2 Small from Hugging Face
-- Load TruthfulQA dataset
-- Fine-tune the model
-- Save to `models/gpt2-truthfulqa-finetuned/`
 
 ### Convert to GGUF
 
-After fine-tuning, convert to GGUF format:
-
 ```bash
-# From llama.cpp directory
-python3 convert_hf_to_gguf.py /path/to/cs259/models/gpt2-truthfulqa-finetuned \
-    --outfile /path/to/cs259/models/gguf/gpt2-truthfulqa.gguf \
-    --outtype f16
+python convert.py --model models/qwen2-0.5b-instruct-finetuned --quantize Q4_0
+
+# Custom output path
+python convert.py \
+    --model models/qwen2-0.5b-instruct-finetuned \
+    --output models/gguf/qwen2-0.5b-Q8_0.gguf \
+    --quantize Q8_0
 ```
 
-### Quantize
-
-```bash
-# From llama.cpp build directory
-./bin/llama-quantize \
-    /path/to/cs259/models/gguf/gpt2-truthfulqa.gguf \
-    /path/to/cs259/models/gguf/gpt2-truthfulqa-Q4_0.gguf \
-    q4_0
-```
+Quantization options: `Q4_0`, `Q4_1`, `Q5_0`, `Q5_1`, `Q8_0`, `f16`
 
 ### Push to Device
 
 ```bash
-adb push models/gguf/gpt2-truthfulqa-Q4_0.gguf /data/local/tmp/gguf/
+adb push models/gguf/qwen2-0.5b-instruct-finetuned.gguf /data/local/tmp/gguf/
 ```
 
-## Configuration
+Update `run-cli.sh` line 13 with your model filename.
 
-Edit `config.py` to adjust:
-- Model paths
-- Training hyperparameters (epochs, batch size, learning rate)
-- Data paths
+### Run Benchmarks
 
-## Directory Structure
-
-```
-cs259/
-├── config.py                          # Configuration file
-├── main.py                           # Main fine-tuning script
-├── requirements.txt                    # Python dependencies
-├── README.md                          # This file
-├── .gitignore                         # Git ignore rules
-├── models/                            # Model outputs (gitignored)
-│   ├── gpt2-truthfulqa-finetuned/    # Fine-tuned model
-│   └── gguf/                          # GGUF models
-├── data/                              # Data cache (gitignored)
-└── logs/                              # Training logs (gitignored)
+**LongBench:**
+```bash
+python longbench_test.py
+python longbench_eval.py
+python parse_log.py debug.log
 ```
 
-## Training Configuration
-
-Default settings in `config.py`:
-- **Epochs**: 3
-- **Batch size**: 4
-- **Learning rate**: 5e-5
-- **Max length**: 512 tokens
-- **Eval split**: 20%
-
-Adjust these in `config.py` based on your hardware and requirements.
-
+**TruthfulQA:**
+```bash
+python truthful_qa_eval.py
+```

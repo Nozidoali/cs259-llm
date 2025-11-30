@@ -10,7 +10,7 @@ adbserial=
 [ "$S" != "" ] && adbserial="-s $S"
 
 # default to the fine-tuned model name but allow overrides
-model="gpt2-truthfulqa.gguf"
+model="qwen2-0.5b-instruct-finetuned.gguf"
 [ "$M" != "" ] && model="$M"
 
 D="none"
@@ -36,11 +36,6 @@ nhvx=
 
 ndev=
 [ "$NDEV" != "" ] && ndev="GGML_HEXAGON_NDEV=$NDEV"
-
-if [ -f "$SCRIPT_DIR/models/gguf/$model" ]; then
-  echo "Pushing $model to device..."
-  adb $adbserial push "$SCRIPT_DIR/models/gguf/$model" "$basedir/../gguf/$model"
-fi
 
 set -x
 
