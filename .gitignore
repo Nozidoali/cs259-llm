@@ -38,6 +38,8 @@ ENV/
 # Logs
 logs/
 *.log
+tmp_output.txt
+debug.log
 
 # OS
 .DS_Store
