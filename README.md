@@ -18,11 +18,20 @@ Edit `.env` and set:
 
 ## Usage
 
-### Fine-tune Qwen2 Models
+All Python scripts are in the `src/` directory. **Always run commands from the project root directory.**
+
+Run scripts using:
+```bash
+python src/script_name.py
+```
+
+**Note:** Scripts reference paths relative to the project root (e.g., `./models/`, `./scripts/`, `./prompt_files/`), so running from the project root is required.
+
+### Fine-tune Models
 
 ```bash
 # Custom training parameters
-python finetune.py --model qwen2-0.5b \
+python src/finetune.py --model qwen2-0.5b \
     --num-epochs 5 \
     --batch-size 2 \
     --learning-rate 2e-5 \
@@ -33,8 +42,7 @@ python finetune.py --model qwen2-0.5b \
 ### Convert to GGUF
 
 ```bash
-# Custom output path
-python convert.py \
+python src/convert.py \
     --model models/qwen2-0.5b-instruct-finetuned \
     --output models/gguf/qwen2-0.5b-Q8_0.gguf \
     --quantize tq1_0
@@ -46,18 +54,18 @@ python convert.py \
 adb push models/gguf/qwen2-0.5b-instruct-finetuned.gguf /data/local/tmp/gguf/
 ```
 
-Update `run-cli.sh` line 13 with your model filename.
+Update `scripts/run-cli.sh` line 13 with your model filename.
 
 ### Run Benchmarks
 
 **LongBench:**
 ```bash
-python longbench_test.py
-python longbench_eval.py
-python parse_log.py debug.log
+python src/longbench_test.py
+python src/longbench_eval.py
+python src/parse_log.py debug.log
 ```
 
 **TruthfulQA:**
 ```bash
-python truthful_qa_eval.py
+python src/truthful_qa_eval.py
 ```

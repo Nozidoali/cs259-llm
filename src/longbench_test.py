@@ -75,7 +75,7 @@ def main():
     local_prompt_dir = "./prompt_files"
     device_prompt_prefix = "/data/local/tmp/prompt_files"
     output_dir = "./qmsum_outputs"
-    cli_path = "./run-cli.sh"
+    cli_path = "./scripts/run-cli.sh"
     
     print(f"Using script: {cli_path}")
     print(f"Log file: debug.log\n")

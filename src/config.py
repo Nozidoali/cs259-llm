@@ -2,9 +2,8 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
-
-BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).parent.parent
+load_dotenv(dotenv_path=BASE_DIR / ".env")
 work_dir_env = os.getenv("WORK_DIR", "").strip()
 WORK_DIR = Path(work_dir_env) if work_dir_env else Path.cwd()
 llama_cpp_env = os.getenv("LLAMA_CPP_DIR", "").strip()

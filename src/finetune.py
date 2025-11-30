@@ -226,7 +226,7 @@ def main():
     
     model_config = MODEL_CONFIGS[args.model]
     if model_config.get("supports_gguf", True):
-        print(f"\n✓ Complete! Convert with: python convert.py --model {output_dir}")
+        print(f"\n✓ Complete! Convert with: python src/convert.py --model {output_dir}")
     else:
         print(f"\n✓ Complete! Note: {model_config['display_name']} does not support GGUF conversion.")
 

@@ -14,7 +14,7 @@ RANDOM_SEED = 42
 
 def run_evaluate(extra_args=None):
     extra_args = extra_args or []
-    script_path = "./run-cli.sh"
+    script_path = "./scripts/run-cli.sh"
     log_filename = "debug.log"
 
     ds = load_dataset("truthfulqa/truthful_qa", "generation", split="validation")
