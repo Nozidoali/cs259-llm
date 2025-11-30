@@ -5,33 +5,34 @@ import torch
 from pathlib import Path
 from transformers import (
     AutoModelForCausalLM,
+    AutoModelForSeq2SeqLM,
     AutoTokenizer,
     TrainingArguments,
     Trainer,
     DataCollatorForLanguageModeling,
+    DataCollatorForSeq2Seq,
 )
 from datasets import load_dataset
 from huggingface_hub import snapshot_download
-import evaluate
-import numpy as np
 from config import (
     TRAINING_CONFIG,
     LOGS_DIR,
     TRUTHFULQA_CACHE_DIR,
     MODELS_DIR,
+    MODEL_CONFIGS,
+    DATASET_CONFIG,
 )
+from bleurt_trainer import BLEURTTrainer
 
 
-def download_qwen2(model_size="0.5B", output_dir=None):
-    if model_size not in ["0.5B", "1.5B"]:
-        raise ValueError("model_size must be '0.5B' or '1.5B'")
+def download_model(model_key, output_dir=None):
+    if model_key not in MODEL_CONFIGS:
+        raise ValueError(f"Unknown model key: {model_key}. Available: {list(MODEL_CONFIGS.keys())}")
     
-    model_id = f"Qwen/Qwen2-{model_size}-Instruct"
+    config = MODEL_CONFIGS[model_key]
+    model_id = config["model_id"]
     
-    if output_dir is None:
-        output_dir = MODELS_DIR / f"qwen2-{model_size.lower()}-instruct"
-    else:
-        output_dir = Path(output_dir)
+    output_dir = MODELS_DIR / config["base_dir"] if output_dir is None else Path(output_dir)
     
     if output_dir.exists() and (output_dir / "config.json").exists():
         print(f"✓ Model already exists at: {output_dir}")
@@ -50,19 +51,25 @@ def download_qwen2(model_size="0.5B", output_dir=None):
     return output_dir
 
 
-def prepare_truthfulqa_dataset(tokenizer, max_length=512, keep_metadata=False):
+def prepare_truthfulqa_dataset(tokenizer, max_length=512, keep_metadata=False, model_type="causal"):
     ds = load_dataset(
-        "truthfulqa/truthful_qa",
-        "generation",
-        split="validation",
+        DATASET_CONFIG["name"],
+        DATASET_CONFIG["config"],
+        split=DATASET_CONFIG["split"],
         cache_dir=str(TRUTHFULQA_CACHE_DIR),
     )
     
     def format_example(ex):
         question = ex['question']
         best_answer = ex['best_answer']
-        text = f"Question: {question}\nAnswer: {best_answer}"
-        result = {"text": text}
+        if model_type == "seq2seq":
+            result = {"input": question, "target": best_answer}
+        else:
+            text = DATASET_CONFIG["format_template"].format(
+                question=question,
+                best_answer=best_answer
+            )
+            result = {"text": text}
         if keep_metadata:
             result["question"] = question
             result["best_answer"] = best_answer
@@ -70,96 +77,61 @@ def prepare_truthfulqa_dataset(tokenizer, max_length=512, keep_metadata=False):
     
     formatted = ds.map(format_example)
     
-    tokenized = formatted.map(
-        lambda examples: tokenizer(
-            examples["text"],
-            truncation=True,
-            max_length=max_length,
-            padding="max_length",
-        ),
-        batched=True,
-        remove_columns=["text"] if not keep_metadata else [],
-        desc="Tokenizing dataset",
-    )
+    if model_type == "seq2seq":
+        def tokenize_seq2seq(examples):
+            inputs = tokenizer(examples["input"], truncation=True, max_length=max_length, padding="max_length")
+            targets = tokenizer(examples["target"], truncation=True, max_length=max_length, padding="max_length")
+            inputs["labels"] = targets["input_ids"]
+            return inputs
+        
+        tokenized = formatted.map(
+            tokenize_seq2seq,
+            batched=True,
+            remove_columns=["input", "target"] if not keep_metadata else ["input", "target"],
+            desc="Tokenizing dataset",
+        )
+    else:
+        tokenized = formatted.map(
+            lambda examples: tokenizer(
+                examples["text"],
+                truncation=True,
+                max_length=max_length,
+                padding="max_length",
+            ),
+            batched=True,
+            remove_columns=["text"] if not keep_metadata else [],
+            desc="Tokenizing dataset",
+        )
     return tokenized
 
 
-def load_model_and_tokenizer(model_size, model_path=None):
-    size = "0.5B" if "0.5" in model_size else "1.5B"
-    if model_path is None:
-        model_path = download_qwen2(size)
-    else:
-        model_path = Path(model_path)
+def load_model_and_tokenizer(model_key, model_path=None):
+    if model_key not in MODEL_CONFIGS:
+        raise ValueError(f"Unknown model key: {model_key}. Available: {list(MODEL_CONFIGS.keys())}")
     
-    print(f"Loading Qwen2 {size} Instruct from: {model_path}")
+    config = MODEL_CONFIGS[model_key]
+    
+    model_path = download_model(model_key) if model_path is None else Path(model_path)
+    
+    print(f"Loading {config['display_name']} from: {model_path}")
     tokenizer = AutoTokenizer.from_pretrained(str(model_path))
-    model = AutoModelForCausalLM.from_pretrained(str(model_path))
+    
+    model_type = config.get("model_type", "causal")
+    if model_type == "seq2seq":
+        model = AutoModelForSeq2SeqLM.from_pretrained(str(model_path))
+    else:
+        model = AutoModelForCausalLM.from_pretrained(str(model_path))
+    
     if hasattr(model, "gradient_checkpointing_enable"):
         model.gradient_checkpointing_enable()
-    output_dir = MODELS_DIR / f"qwen2-{size.lower()}-instruct-finetuned"
-    return model, tokenizer, output_dir
-
-
-class BLEURTTrainer(Trainer):
-    def __init__(self, *args, eval_dataset_with_answers=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.eval_dataset_with_answers = eval_dataset_with_answers
-        self.bleurt = evaluate.load("bleurt", "bleurt-large-128")
     
-    def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval"):
-        if eval_dataset is None:
-            eval_dataset = self.eval_dataset
-        
-        if self.eval_dataset_with_answers is None:
-            return super().evaluate(eval_dataset, ignore_keys, metric_key_prefix)
-        
-        self.model.eval()
-        bleurt_scores = []
-        
-        print("Computing BLEURT scores...")
-        for i, example in enumerate(eval_dataset):
-            if i % 10 == 0:
-                print(f"  Processing {i}/{len(eval_dataset)}")
-            
-            question = example.get("question", "")
-            best_answer = example.get("best_answer", "")
-            
-            if not question or not best_answer:
-                continue
-            
-            prompt = f"Question: {question}\nAnswer:"
-            inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
-            inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
-            
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=50,
-                    do_sample=False,
-                    pad_token_id=self.tokenizer.eos_token_id,
-                )
-            
-            generated = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            if "Answer:" in generated:
-                answer = generated.split("Answer:")[-1].strip()
-            else:
-                answer = generated[len(prompt):].strip()
-            
-            if answer and best_answer:
-                score = self.bleurt.compute(predictions=[answer], references=[best_answer])["scores"][0]
-                bleurt_scores.append(score)
-        
-        avg_bleurt = np.mean(bleurt_scores) if bleurt_scores else 0.0
-        
-        metrics = {f"{metric_key_prefix}_bleurt_score": avg_bleurt}
-        self.log(metrics)
-        
-        return metrics
+    output_dir = MODELS_DIR / config["finetuned_dir"]
+    return model, tokenizer, output_dir, model_type
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Fine-tune Qwen2 models on TruthfulQA")
-    parser.add_argument("--model", type=str, default="qwen2-0.5b", choices=["qwen2-0.5b", "qwen2-1.5b"])
+    parser = argparse.ArgumentParser(description="Fine-tune models on TruthfulQA")
+    parser.add_argument("--model", type=str, default="qwen2-0.5b", choices=list(MODEL_CONFIGS.keys()))
     parser.add_argument("--model-path", type=str, default=None)
     parser.add_argument("--output-dir", type=str, default=None)
     parser.add_argument("--max-length", type=int, default=None)
@@ -172,7 +144,7 @@ def main():
     
     args = parser.parse_args()
     
-    model, tokenizer, default_output_dir = load_model_and_tokenizer(args.model, args.model_path)
+    model, tokenizer, default_output_dir, model_type = load_model_and_tokenizer(args.model, args.model_path)
     
     if args.download_only:
         print("\n✓ Download complete. Run without --download-only to fine-tune.")
@@ -182,25 +154,21 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     
     config = TRAINING_CONFIG.copy()
-    if args.max_length:
-        config["max_length"] = args.max_length
-    if args.num_epochs:
-        config["num_epochs"] = args.num_epochs
-    if args.batch_size:
-        config["batch_size"] = args.batch_size
-    if args.gradient_accumulation_steps:
-        config["gradient_accumulation_steps"] = args.gradient_accumulation_steps
-    if args.learning_rate:
-        config["learning_rate"] = args.learning_rate
+    if args.max_length: config["max_length"] = args.max_length
+    if args.num_epochs: config["num_epochs"] = args.num_epochs
+    if args.batch_size: config["batch_size"] = args.batch_size
+    if args.gradient_accumulation_steps: config["gradient_accumulation_steps"] = args.gradient_accumulation_steps
+    if args.learning_rate: config["learning_rate"] = args.learning_rate
     
-    print(f"\nFine-tuning {args.model.upper()} on TruthfulQA")
+    model_display_name = MODEL_CONFIGS[args.model]["display_name"]
+    print(f"\nFine-tuning {model_display_name} on TruthfulQA")
     print(f"Output: {output_dir}")
     print(f"Max length: {config['max_length']}, Epochs: {config['num_epochs']}")
     print(f"Batch size: {config['batch_size']}, Gradient accumulation: {config.get('gradient_accumulation_steps', 1)}")
     print(f"Effective batch size: {config['batch_size'] * config.get('gradient_accumulation_steps', 1)}")
     print(f"LR: {config['learning_rate']}, Using BLEURT: {args.use_bleurt}\n")
     
-    dataset = prepare_truthfulqa_dataset(tokenizer, max_length=config["max_length"], keep_metadata=args.use_bleurt)
+    dataset = prepare_truthfulqa_dataset(tokenizer, max_length=config["max_length"], keep_metadata=args.use_bleurt, model_type=model_type)
     dataset = dataset.train_test_split(test_size=config["eval_split"], seed=config["seed"])
     
     eval_dataset_with_answers = dataset["test"] if args.use_bleurt else None
@@ -235,15 +203,19 @@ def main():
     )
     
     trainer_class = BLEURTTrainer if args.use_bleurt else Trainer
-    trainer = trainer_class(
-        model=model,
-        args=training_args,
-        train_dataset=dataset["train"],
-        eval_dataset=dataset["test"],
-        data_collator=DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False),
-        eval_dataset_with_answers=eval_dataset_with_answers if args.use_bleurt else None,
-        tokenizer=tokenizer,
-    )
+    data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer) if model_type == "seq2seq" else DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+    trainer_kwargs = {
+        "model": model,
+        "args": training_args,
+        "train_dataset": dataset["train"],
+        "eval_dataset": dataset["test"],
+        "data_collator": data_collator,
+        "tokenizer": tokenizer,
+    }
+    if args.use_bleurt:
+        trainer_kwargs["eval_dataset_with_answers"] = eval_dataset_with_answers
+        trainer_kwargs["model_type"] = model_type
+    trainer = trainer_class(**trainer_kwargs)
     
     print("Starting training...\n")
     trainer.train()
@@ -251,7 +223,12 @@ def main():
     print(f"\nSaving to: {output_dir}")
     trainer.save_model()
     tokenizer.save_pretrained(str(output_dir))
-    print("\n✓ Complete! Convert with: python convert.py --model", output_dir)
+    
+    model_config = MODEL_CONFIGS[args.model]
+    if model_config.get("supports_gguf", True):
+        print(f"\n✓ Complete! Convert with: python convert.py --model {output_dir}")
+    else:
+        print(f"\n✓ Complete! Note: {model_config['display_name']} does not support GGUF conversion.")
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ import importlib
 import sys
 from pathlib import Path
 
-from config import LLAMA_CPP_DIR, GGUF_OUTPUT_DIR, QUANTIZE_LEVEL
+from config import LLAMA_CPP_DIR, GGUF_OUTPUT_DIR, QUANTIZE_LEVEL, MODEL_CONFIGS, MODELS_DIR
 
 
 def convert_to_gguf(model_path: Path, output_file: Path, quantize_level: str) -> None:
@@ -41,6 +41,19 @@ def main() -> None:
     
     if not model_path.exists():
         raise FileNotFoundError(f"Model not found: {model_path}")
+    
+    model_key = None
+    for key, config in MODEL_CONFIGS.items():
+        if model_path.name == config["base_dir"] or model_path.name == config["finetuned_dir"]:
+            model_key = key
+            break
+    
+    if model_key and not MODEL_CONFIGS[model_key].get("supports_gguf", True):
+        raise ValueError(
+            f"Model '{MODEL_CONFIGS[model_key]['display_name']}' does not support GGUF conversion.\n"
+            f"GGUF conversion is only supported for decoder-only (causal) models.\n"
+            f"This model is a seq2seq (encoder-decoder) model and cannot be converted."
+        )
     
     if args.output:
         output_file = Path(args.output)

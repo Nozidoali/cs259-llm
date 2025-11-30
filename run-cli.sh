@@ -10,7 +10,7 @@ adbserial=
 [ "$S" != "" ] && adbserial="-s $S"
 
 # default to the fine-tuned model name but allow overrides
-model="qwen2-0.5b-instruct-finetuned.gguf"
+model="qwen2-0.5b-Q8_0.gguf"
 [ "$M" != "" ] && model="$M"
 
 D="none"

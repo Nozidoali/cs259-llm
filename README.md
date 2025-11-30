@@ -23,16 +23,12 @@ python finetune.py --model qwen2-0.5b \
 ### Convert to GGUF
 
 ```bash
-python convert.py --model models/qwen2-0.5b-instruct-finetuned --quantize Q4_0
-
 # Custom output path
 python convert.py \
     --model models/qwen2-0.5b-instruct-finetuned \
     --output models/gguf/qwen2-0.5b-Q8_0.gguf \
-    --quantize Q8_0
+    --quantize tq1_0
 ```
-
-Quantization options: `Q4_0`, `Q4_1`, `Q5_0`, `Q5_1`, `Q8_0`, `f16`
 
 ### Push to Device
 
