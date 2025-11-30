@@ -45,6 +45,9 @@ debug.log
 .DS_Store
 Thumbs.db
 
+# Environment
+.env
+
 # Training outputs
 checkpoint-*/
 runs/

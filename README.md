@@ -2,9 +2,19 @@
 
 ## Setup
 
+1. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
+
+2. Configure environment variables:
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and set:
+- `WORK_DIR`: Working directory for models, data, and logs (default: current directory)
+- `LLAMA_CPP_DIR`: Path to llama.cpp directory containing `convert_hf_to_gguf.py` (required for GGUF conversion)
 
 ## Usage
 
