@@ -85,5 +85,11 @@ DATASET_CONFIG = {
     "format_template": "Question: {question}\nAnswer: {best_answer}",
 }
 
+EVALUATION_CONFIG = {
+    "truthfulqa_num_tokens": 25,
+    "truthfulqa_num_samples": 10,
+    "longbench_n_benchmarks": 1,
+}
+
 for dir_path in [MODELS_DIR, GGUF_OUTPUT_DIR, DATA_DIR, TRUTHFULQA_CACHE_DIR, LOGS_DIR]:
     dir_path.mkdir(parents=True, exist_ok=True)

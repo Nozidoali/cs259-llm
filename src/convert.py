@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import argparse
 import importlib
 import sys
 from pathlib import Path
 
-from config import LLAMA_CPP_DIR, GGUF_OUTPUT_DIR, QUANTIZE_LEVEL, MODEL_CONFIGS, MODELS_DIR
+from config import LLAMA_CPP_DIR
 
 
 def convert_to_gguf(model_path: Path, output_file: Path, quantize_level: str) -> None:
@@ -25,44 +24,3 @@ def convert_to_gguf(model_path: Path, output_file: Path, quantize_level: str) ->
     ]
     convert_module.main()
     print(f"\n✓ Complete: {output_file}")
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Convert Hugging Face model to GGUF")
-    parser.add_argument("--model", type=str, default=None)
-    parser.add_argument("--output", type=str, default=None)
-    parser.add_argument("--quantize", type=str, default=QUANTIZE_LEVEL)
-    
-    args = parser.parse_args()
-    
-    if not args.model:
-        raise ValueError("--model is required")
-    model_path = Path(args.model)
-    
-    if not model_path.exists():
-        raise FileNotFoundError(f"Model not found: {model_path}")
-    
-    model_key = None
-    for key, config in MODEL_CONFIGS.items():
-        if model_path.name == config["base_dir"] or model_path.name == config["finetuned_dir"]:
-            model_key = key
-            break
-    
-    if model_key and not MODEL_CONFIGS[model_key].get("supports_gguf", True):
-        raise ValueError(
-            f"Model '{MODEL_CONFIGS[model_key]['display_name']}' does not support GGUF conversion.\n"
-            f"GGUF conversion is only supported for decoder-only (causal) models.\n"
-            f"This model is a seq2seq (encoder-decoder) model and cannot be converted."
-        )
-    
-    if args.output:
-        output_file = Path(args.output)
-    else:
-        output_file = GGUF_OUTPUT_DIR / f"{model_path.name}.gguf"
-    
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    convert_to_gguf(model_path, output_file, args.quantize)
-
-
-if __name__ == "__main__":
-    main()
