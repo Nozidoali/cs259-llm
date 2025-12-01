@@ -8,3 +8,6 @@ evaluate>=0.4.0
 python-dotenv>=1.0.0
 bitsandbytes>=0.41.0
 git+https://github.com/google-research/bleurt.git
+tf-keras
+trl
+deepspeed

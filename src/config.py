@@ -65,7 +65,11 @@ TRAINING_CONFIG = {
 }
 
 BLEURT_CONFIG = {
-    "model_name": "bleurt-large-128",
+    # BLEURT model options (in order of memory usage, high to low):
+    # - "bleurt-large-128": Best quality, ~1.2GB memory
+    # - "bleurt-base-128": Good quality, ~500MB memory (recommended if OOM)
+    # - "bleurt-tiny-128": Lower quality, ~200MB memory (use if still OOM)
+    "model_name": "bleurt-large-128",  # Change to "bleurt-base-128" or "bleurt-tiny-128" if OOM
     "max_new_tokens": 50,
     "prompt_template": "Question: {question}\nAnswer:",
 }
