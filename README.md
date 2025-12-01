@@ -2,12 +2,18 @@
 
 ## Setup
 
-1. Install dependencies:
+1. **Run the setup script to create a clean conda environment:**
 ```bash
-pip install -r requirements.txt
+bash setup.sh
 ```
 
-2. Configure environment variables:
+This will:
+- Remove any existing `snapdragon` environment
+- Create a fresh `snapdragon` environment with Python 3.9
+- Install PyTorch via conda (critical for macOS to avoid threading issues)
+- Install all required dependencies
+
+1. Configure environment variables:
 ```bash
 cp .env.example .env
 ```
@@ -15,17 +21,6 @@ cp .env.example .env
 Edit `.env` and set:
 - `WORK_DIR`: Working directory for models, data, and logs (default: current directory)
 - `LLAMA_CPP_DIR`: Path to llama.cpp directory containing `convert_hf_to_gguf.py` (required for GGUF conversion)
-
-## Usage
-
-All Python scripts are in the `src/` directory. **Always run commands from the project root directory.**
-
-Run scripts using:
-```bash
-python src/script_name.py
-```
-
-**Note:** Scripts reference paths relative to the project root (e.g., `./models/`, `./scripts/`, `./prompt_files/`), so running from the project root is required.
 
 ### Fine-tune Models
 
@@ -37,6 +32,11 @@ python src/finetune.py --model qwen2-0.5b \
     --learning-rate 2e-5 \
     --max-length 2048 \
     --use-bleurt
+
+# Or use the MoE model
+python src/finetune.py --model qwen1.5-moe-a2.7b \
+    --num-epochs 3 \
+    --batch-size 1
 ```
 
 ### Convert to GGUF
@@ -69,3 +69,4 @@ python src/parse_log.py debug.log
 ```bash
 python src/truthful_qa_eval.py
 ```
+

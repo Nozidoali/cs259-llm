@@ -51,6 +51,14 @@ MODEL_CONFIGS = {
         "model_type": "seq2seq",
         "supports_gguf": False,
     },
+    "qwen1.5-moe-a2.7b": {
+        "model_id": "Qwen/Qwen1.5-MoE-A2.7B-Chat",
+        "base_dir": "qwen1.5-moe-a2.7b-chat",
+        "finetuned_dir": "qwen1.5-moe-a2.7b-chat-finetuned",
+        "display_name": "Qwen1.5-MoE A2.7B Chat",
+        "model_type": "causal",
+        "supports_gguf": True,
+    },
 }
 
 TRAINING_CONFIG = {

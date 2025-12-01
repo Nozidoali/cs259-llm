@@ -46,6 +46,7 @@ def download_model(model_key, output_dir=None):
         local_dir=str(output_dir),
         local_dir_use_symlinks=False,
         resume_download=True,
+        max_workers=1,
     )
     print(f"✓ Successfully downloaded to: {output_dir}")
     return output_dir

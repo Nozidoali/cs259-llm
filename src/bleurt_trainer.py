@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 
+import os
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 import torch
-import evaluate
 import numpy as np
 from transformers import Trainer
 from config import BLEURT_CONFIG
@@ -12,7 +15,14 @@ class BLEURTTrainer(Trainer):
         super().__init__(*args, **kwargs)
         self.eval_dataset_with_answers = eval_dataset_with_answers
         self.model_type = model_type
-        self.bleurt = evaluate.load("bleurt", BLEURT_CONFIG["model_name"])
+        self._bleurt = None
+    
+    @property
+    def bleurt(self):
+        if self._bleurt is None:
+            import evaluate
+            self._bleurt = evaluate.load("bleurt", BLEURT_CONFIG["model_name"])
+        return self._bleurt
     
     def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval"):
         if eval_dataset is None:
