@@ -47,7 +47,7 @@ def load_base_model_for_embeddings(base_model: str):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
-    model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.float32)
+    model = AutoModelForCausalLM.from_pretrained(model_path, dtype=torch.float32)
     model.eval()
     
     if hasattr(model, 'model') and hasattr(model.model, 'embed_tokens'):

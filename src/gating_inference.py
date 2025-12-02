@@ -54,9 +54,9 @@ class GatingNetworkInference:
         final_model_path = model_path / "final_model.pt"
         
         if best_model_path.exists():
-            self.gating_model.load_state_dict(torch.load(best_model_path, map_location=self.device))
+            self.gating_model.load_state_dict(torch.load(best_model_path, map_location=self.device, weights_only=True))
         elif final_model_path.exists():
-            self.gating_model.load_state_dict(torch.load(final_model_path, map_location=self.device))
+            self.gating_model.load_state_dict(torch.load(final_model_path, map_location=self.device, weights_only=True))
         else:
             raise FileNotFoundError(f"Neither best_model.pt nor final_model.pt found in {model_path}")
         

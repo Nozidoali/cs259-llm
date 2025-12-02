@@ -36,7 +36,7 @@ def collate_fn(batch):
     return {"embedding": embeddings, "label": labels}
 
 
-def train_epoch(model, dataloader, criterion, optimizer, device):
+def train_epoch(model, dataloader, criterion, optimizer, device, pos_weight=None):
     model.train()
     total_loss = 0.0
     all_preds = []
@@ -49,6 +49,11 @@ def train_epoch(model, dataloader, criterion, optimizer, device):
         optimizer.zero_grad()
         outputs = model(embeddings)
         loss = criterion(outputs, labels)
+        if pos_weight is not None:
+            weights = torch.where(labels == 1, pos_weight, torch.tensor(1.0).to(device))
+            loss = (loss * weights).mean()
+        else:
+            loss = loss.mean()
         loss.backward()
         optimizer.step()
         
@@ -63,7 +68,7 @@ def train_epoch(model, dataloader, criterion, optimizer, device):
     return avg_loss, accuracy, f1
 
 
-def evaluate(model, dataloader, criterion, device):
+def evaluate(model, dataloader, criterion, device, pos_weight=None):
     model.eval()
     total_loss = 0.0
     all_preds = []
@@ -76,6 +81,11 @@ def evaluate(model, dataloader, criterion, device):
             
             outputs = model(embeddings)
             loss = criterion(outputs, labels)
+            if pos_weight is not None:
+                weights = torch.where(labels == 1, pos_weight, torch.tensor(1.0).to(device))
+                loss = (loss * weights).mean()
+            else:
+                loss = loss.mean()
             
             total_loss += loss.item()
             preds = (outputs >= 0.5).long().cpu().numpy()
@@ -191,7 +201,12 @@ def main():
     total_params = sum(p.numel() for p in model.parameters())
     logger.info(f"Total parameters: {total_params:,}\n")
     
-    criterion = nn.BCELoss()
+    train_labels = [item["label"] for item in dataset["train"]]
+    num_pos = sum(train_labels)
+    num_neg = len(train_labels) - num_pos
+    pos_weight = torch.tensor(num_neg / num_pos if num_pos > 0 else 1.0).to(device)
+    criterion = nn.BCELoss(reduction='none')
+    logger.info(f"Class weights - Positive (summarization): {pos_weight.item():.2f}x\n")
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=config["learning_rate"],
@@ -206,33 +221,41 @@ def main():
     logger.info("=" * 60)
     
     best_val_f1 = -1.0
+    best_val_loss = float('inf')
     best_epoch = -1
     
     for epoch in range(config["num_epochs"]):
         logger.info(f"Epoch {epoch + 1}/{config['num_epochs']}")
         
-        train_loss, train_acc, train_f1 = train_epoch(model, train_loader, criterion, optimizer, device)
+        train_loss, train_acc, train_f1 = train_epoch(model, train_loader, criterion, optimizer, device, pos_weight)
         logger.info(f"  Train - Loss: {train_loss:.4f}, Acc: {train_acc:.4f}, F1: {train_f1:.4f}")
         
-        val_metrics = evaluate(model, val_loader, criterion, device)
+        val_metrics = evaluate(model, val_loader, criterion, device, pos_weight)
         logger.info(f"  Val   - Loss: {val_metrics['loss']:.4f}, Acc: {val_metrics['accuracy']:.4f}, "
                    f"F1: {val_metrics['f1']:.4f}, Prec: {val_metrics['precision']:.4f}, "
                    f"Rec: {val_metrics['recall']:.4f}")
         
+        is_best = False
         if val_metrics["f1"] > best_val_f1:
             best_val_f1 = val_metrics["f1"]
+            is_best = True
+        elif val_metrics["f1"] == best_val_f1 == 0.0 and val_metrics["loss"] < best_val_loss:
+            best_val_loss = val_metrics["loss"]
+            is_best = True
+        
+        if is_best:
             best_epoch = epoch + 1
             torch.save(model.state_dict(), output_dir / "best_model.pt")
-            logger.info(f"  ✓ Saved best model (F1: {best_val_f1:.4f})")
+            logger.info(f"  ✓ Saved best model (F1: {val_metrics['f1']:.4f}, Loss: {val_metrics['loss']:.4f})")
         
         logger.info("")
     
     logger.info("=" * 60)
-    logger.info(f"Training complete! Best validation F1: {best_val_f1:.4f} (epoch {best_epoch})")
+    logger.info(f"Training complete! Best validation F1: {best_val_f1:.4f}, Loss: {best_val_loss:.4f} (epoch {best_epoch})")
     
     logger.info("Evaluating on test set...")
-    model.load_state_dict(torch.load(output_dir / "best_model.pt"))
-    test_metrics = evaluate(model, test_loader, criterion, device)
+    model.load_state_dict(torch.load(output_dir / "best_model.pt", weights_only=True))
+    test_metrics = evaluate(model, test_loader, criterion, device, pos_weight)
     logger.info(f"Test - Loss: {test_metrics['loss']:.4f}, Acc: {test_metrics['accuracy']:.4f}, "
                f"F1: {test_metrics['f1']:.4f}, Prec: {test_metrics['precision']:.4f}, "
                f"Rec: {test_metrics['recall']:.4f}")
