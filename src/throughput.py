@@ -10,51 +10,37 @@ logger = logging.getLogger(__name__)
 
 def parse_bench_output(output):
     result = {"prefill": None, "decode": None}
-    
     if not output:
-        logger.error("Empty output provided to parse_bench_output")
         return None
     
     for line in output.strip().split('\n'):
         if not line.strip() or line.strip().startswith('|---'):
             continue
-        
         if '|' in line and ('pp512' in line or 'tg128' in line):
             parts = [p.strip() for p in line.split('|')]
             test_type = None
-            ts_value = None
+            if 'pp512' in line:
+                test_type = 'prefill'
+            elif 'tg128' in line:
+                test_type = 'decode'
             
-            for part in parts:
-                if 'pp512' in part:
-                    test_type = 'prefill'
-                elif 'tg128' in part:
-                    test_type = 'decode'
-                
-                if test_type:
+            if test_type:
+                for part in reversed(parts):
                     match = re.search(r'([\d.]+)\s*±', part)
                     if match:
-                        ts_value = float(match.group(1))
-                        break
-                    else:
-                        match = re.search(r'([\d.]+)', part)
-                        if match:
-                            try:
-                                ts_value = float(match.group(1))
-                                break
-                            except ValueError:
-                                continue
-            
-            if test_type and ts_value is not None:
-                result[test_type] = ts_value
-                logger.debug(f"Parsed {test_type}: {ts_value}")
+                        try:
+                            ts_value = float(match.group(1))
+                            result[test_type] = ts_value
+                            break
+                        except ValueError:
+                            continue
     
     if result["prefill"] is None or result["decode"] is None:
-        logger.warning(f"Missing metrics - prefill: {result['prefill']}, decode: {result['decode']}")
         return None
     return result
 
 
-def get_throughput(script_path="./scripts/run-bench.sh", model=None):
+def get_throughput(script_path="./scripts/run-bench.sh", model=None, config=None):
     if not os.path.exists(script_path):
         logger.error(f"Benchmark script not found at {script_path}")
         return None
@@ -63,7 +49,15 @@ def get_throughput(script_path="./scripts/run-bench.sh", model=None):
     try:
         cmd = ["bash", script_path]
         env = os.environ.copy()
-        if model:
+        # Use config values if provided, otherwise fall back to model parameter
+        if config:
+            if config.get("model"):
+                env["M"] = config["model"]
+            if config.get("device"):
+                env["D"] = config["device"]
+            if config.get("batch_size"):
+                env["BATCH_SIZE"] = str(config["batch_size"])
+        elif model:
             env["M"] = model
         logger.debug(f"Running command: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env)

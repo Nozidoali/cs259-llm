@@ -39,20 +39,23 @@ def load_references():
     return ref_map
 
 
-def run_one(cli_path: str, prompt_device_path: str, output_path: str, extra_args=None):
+def run_one(cli_path: str, prompt_device_path: str, output_path: str, num_tokens=None, extra_args=None):
     if extra_args is None:
         extra_args = []
-    cmd = [cli_path, "-no-cnv", "-f", prompt_device_path] + extra_args
+    cmd = [cli_path, "-no-cnv", "-f", prompt_device_path]
+    if num_tokens is not None:
+        cmd.extend(["-n", str(num_tokens)])
+    cmd.extend(extra_args)
     if cli_path.endswith(".sh"):
         cmd = ["bash"] + cmd
 
     logger.debug(f"Running command: {' '.join(cmd)}")
     start = time.time()
     
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
     
     # Write stdout to output file
-    with open(output_path, "w", encoding="utf-8") as fout:
+    with open(output_path, "w", encoding="utf-8", errors="replace") as fout:
         if proc.stdout:
             fout.write(proc.stdout)
     
@@ -73,7 +76,7 @@ def run_one(cli_path: str, prompt_device_path: str, output_path: str, extra_args
 
 
 def run_benchmarks(local_prompt_dir: str, device_prompt_prefix: str, output_dir: str,
-                   cli_path: str, n_benchmarks=1, extra_args=None, random_seed=42):
+                   cli_path: str, n_benchmarks=1, num_tokens=None, extra_args=None, random_seed=42):
     ensure_dir(output_dir)
     local = Path(local_prompt_dir)
     prompt_files = sorted(local.glob("*.prompt.txt"))
@@ -95,7 +98,7 @@ def run_benchmarks(local_prompt_dir: str, device_prompt_prefix: str, output_dir:
         out_path = os.path.join(output_dir, out_fname)
 
         logger.info(f"Running prompt {fname} → {out_fname}")
-        latency = run_one(cli_path, prompt_dev_path, out_path, extra_args)
+        latency = run_one(cli_path, prompt_dev_path, out_path, num_tokens, extra_args)
         logger.info(f"  Completed in {latency:.3f}s")
         latencies.append((fname, latency))
 
@@ -117,7 +120,7 @@ def evaluate_outputs(output_dir: str, ref_map: dict):
             continue
         idx = int(m.group(1))
         outpath = os.path.join(output_dir, fname)
-        with open(outpath, "r", encoding="utf-8") as f:
+        with open(outpath, "r", encoding="utf-8", errors="replace") as f:
             pred = f.read().strip()
 
         if idx not in ref_map:
@@ -145,13 +148,13 @@ def evaluate_outputs(output_dir: str, ref_map: dict):
 
 def get_longbench_score(local_prompt_dir="./prompt_files", device_prompt_prefix="/data/local/tmp/prompt_files",
                         output_dir="./qmsum_outputs", cli_path="./scripts/run-cli.sh",
-                        n_benchmarks=1, extra_args=None, random_seed=42):
-    logger.info(f"Starting LongBench evaluation (n_benchmarks={n_benchmarks}, seed={random_seed})...")
+                        n_benchmarks=1, num_tokens=None, extra_args=None, random_seed=42):
+    logger.info(f"Starting LongBench evaluation (n_benchmarks={n_benchmarks}, num_tokens={num_tokens}, seed={random_seed})...")
     ref_map = load_references()
     logger.info(f"Loaded {len(ref_map)} references")
     
     latencies, total_time = run_benchmarks(
-        local_prompt_dir, device_prompt_prefix, output_dir, cli_path, n_benchmarks, extra_args, random_seed
+        local_prompt_dir, device_prompt_prefix, output_dir, cli_path, n_benchmarks, num_tokens, extra_args, random_seed
     )
     logger.info(f"Completed {len(latencies)} benchmarks in {total_time:.2f}s (avg: {total_time/len(latencies):.2f}s)")
     

@@ -89,6 +89,7 @@ EVALUATION_CONFIG = {
     "truthfulqa_num_tokens": 25,
     "truthfulqa_num_samples": 10,
     "longbench_n_benchmarks": 1,
+    "longbench_num_tokens": 200,
 }
 
 for dir_path in [MODELS_DIR, GGUF_OUTPUT_DIR, DATA_DIR, TRUTHFULQA_CACHE_DIR, LOGS_DIR]:

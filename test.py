@@ -20,7 +20,7 @@ log_file = LOGS_DIR / f"test_{datetime_str}.log"
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler(log_file),
@@ -49,6 +49,24 @@ def build_cli_args(config):
         args.extend(["--seed", str(config["seed"])])
     if config.get("n_gpu_layers"):
         args.extend(["-ngl", str(config["n_gpu_layers"])])
+    
+    # Long context optimization options
+    if config.get("rope_scale"):
+        args.extend(["--rope-scale", str(config["rope_scale"])])
+    if config.get("rope_freq_base"):
+        args.extend(["--rope-freq-base", str(config["rope_freq_base"])])
+    if config.get("rope_freq_scale"):
+        args.extend(["--rope-freq-scale", str(config["rope_freq_scale"])])
+    if config.get("no_mmap"):
+        args.append("--no-mmap")
+    if config.get("no_kv_offload"):
+        args.append("--no-kv-offload")
+    if config.get("kv_offload"):
+        args.append("--kv-offload")
+    if config.get("flash_attn") is False:
+        args.append("--no-flash")
+    elif config.get("flash_attn") is True:
+        args.extend(["-fa", "on"])
     
     return args
 
@@ -124,7 +142,7 @@ def run_experiment(config_path, output_dir="./results"):
     
     logger.info("Running throughput benchmark...")
     try:
-        bench_metrics = get_throughput(script_path="./scripts/run-bench.sh", model=config.get("model"))
+        bench_metrics = get_throughput(script_path="./scripts/run-bench.sh", config=config)
         if bench_metrics:
             results["results"]["throughput"] = {
                 "prefill_tokens_per_sec": bench_metrics.get("prefill"),
@@ -146,6 +164,7 @@ def run_experiment(config_path, output_dir="./results"):
             output_dir="./qmsum_outputs",
             cli_path="./scripts/run-cli.sh",
             n_benchmarks=config.get("longbench_n_benchmarks", EVALUATION_CONFIG["longbench_n_benchmarks"]),
+            num_tokens=config.get("longbench_num_tokens", EVALUATION_CONFIG["longbench_num_tokens"]),
             extra_args=cli_args,
             random_seed=config.get("seed", 42)
         )
@@ -163,7 +182,10 @@ def run_experiment(config_path, output_dir="./results"):
     
     for key in env_vars.keys():
         if key in original_env:
-            os.environ[key] = original_env[key]
+            if original_env[key] is not None:
+                os.environ[key] = original_env[key]
+            elif key in os.environ:
+                del os.environ[key]
         elif key in os.environ:
             del os.environ[key]
     

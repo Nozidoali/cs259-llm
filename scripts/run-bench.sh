@@ -16,6 +16,9 @@ model="Llama-3.2-1B-Instruct-Q3_K_L.gguf"
 device="none"
 [ "$D" != "" ] && device="$D"
 
+batch_size=128
+[ "$BATCH_SIZE" != "" ] && batch_size="$BATCH_SIZE"
+
 verbose=""
 [ "$V" != "" ] && verbose="$V"
 
@@ -36,5 +39,5 @@ adb $adbserial shell " \
   ADSP_LIBRARY_PATH=$basedir/$branch/lib \
     $ndev $nhvx $opmask ./$branch/bin/llama-bench --device $device --mmap 0 -m $basedir/../gguf/$model \
         --poll 1000 -t 6 --cpu-mask 0xfc --cpu-strict 1 \
-        --batch-size 128 -ngl 99 $@ \
+        --batch-size $batch_size -ngl 99 $@ \
 "

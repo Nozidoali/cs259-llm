@@ -3,6 +3,7 @@ import os
 import random
 import subprocess
 import logging
+import numpy as np
 
 from datasets import load_dataset
 import evaluate
@@ -76,15 +77,15 @@ def get_truthfulqa_score(script_path="./scripts/run-cli.sh", num_samples=100, nu
         score_true = bleurt.compute(predictions=predictions_true, references=correct_answers)["scores"]
         score_false = bleurt.compute(predictions=predictions_false, references=incorrect_answers)["scores"]
         max_score = max(score_true)
-        acc_score = int(max_score > max(score_false))
+        acc_score = int(max(score_true) > max(score_false))
 
         if (i + 1) % 10 == 0 or i == n - 1:
             logger.info(f"Progress: {i+1}/{n} - max_score: {max_score:.3f}, acc: {acc_score}")
         max_score_arr.append(max_score)
         acc_score_arr.append(acc_score)
 
-        avg_accuracy = sum(acc_score_arr) / n
-        avg_max = sum(max_score_arr) / len(max_score_arr)
-        logger.info(f"TruthfulQA complete - Avg max_score: {avg_max:.3f}, Avg accuracy: {avg_accuracy:.3f}")
-        return avg_max, avg_accuracy
+    accuracy = sum(acc_score_arr) / n
+    avg_max_score = np.mean(np.array(max_score_arr))
+    logger.info(f"TruthfulQA complete - Avg max_score: {avg_max_score:.3f}, Avg accuracy: {accuracy:.3f}")
+    return avg_max_score, accuracy
 
