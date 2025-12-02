@@ -92,5 +92,21 @@ EVALUATION_CONFIG = {
     "longbench_num_tokens": 200,
 }
 
-for dir_path in [MODELS_DIR, GGUF_OUTPUT_DIR, DATA_DIR, TRUTHFULQA_CACHE_DIR, LOGS_DIR]:
+GATING_CONFIG = {
+    "base_model": "qwen2-0.5b",  # Default base model for embeddings
+    "hidden_dims": [512, 256],  # MLP hidden layer dimensions
+    "dropout": 0.1,  # Dropout rate
+    "learning_rate": 1e-4,  # Learning rate for gating network training
+    "batch_size": 32,  # Batch size for training
+    "num_epochs": 10,  # Number of training epochs
+    "weight_decay": 0.01,  # Weight decay
+    "train_split": 0.7,  # Training split
+    "val_split": 0.15,  # Validation split
+    "test_split": 0.15,  # Test split
+    "seed": 42,  # Random seed
+}
+
+GATING_MODEL_DIR = MODELS_DIR / "gating-network"
+
+for dir_path in [MODELS_DIR, GGUF_OUTPUT_DIR, DATA_DIR, TRUTHFULQA_CACHE_DIR, LOGS_DIR, GATING_MODEL_DIR]:
     dir_path.mkdir(parents=True, exist_ok=True)

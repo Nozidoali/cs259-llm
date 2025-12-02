@@ -25,6 +25,7 @@ conda run -n snapdragon pip install sentencepiece
 conda run -n snapdragon pip install protobuf
 conda run -n snapdragon pip install rouge_score nltk    
 conda run -n snapdragon pip install tf-keras==2.16.0
+conda run -n snapdragon pip install scikit-learn
 
 echo "Installing TensorFlow Metal for Apple Silicon GPU acceleration (for BLEURT)..."
 conda run -n snapdragon pip install tensorflow-macos tensorflow-metal
