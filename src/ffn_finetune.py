@@ -16,7 +16,6 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     TrainingArguments,
-    Trainer,
     DataCollatorForLanguageModeling,
 )
 
@@ -24,7 +23,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from config import TRAINING_CONFIG, MODELS_DIR
 from finetune import prepare_truthfulqa_dataset, prepare_qmsum_dataset
-from bleurt_trainer import BLEURTTrainer
+from dataset_eval_trainer import DatasetEvalTrainer
 from datasets import concatenate_datasets
 
 logging.basicConfig(
@@ -133,8 +132,6 @@ def parse_args():
         parser.add_argument(f"--{key}", type=type(default) if default is not None else str,
                            default=None, help=f"Default: {default}")
     
-    parser.add_argument("--use_bleurt", action="store_true",
-                       help="Use BLEURT evaluation during training")
     parser.add_argument("--dataset", type=str, default="truthfulqa",
                        choices=["truthfulqa", "qmsum", "both"],
                        help="Dataset to use for fine-tuning (default: truthfulqa)")
@@ -166,8 +163,6 @@ def load_config(args):
         config["model_path"] = args.model_path
     if args.output_dir:
         config["output_dir"] = args.output_dir
-    if args.use_bleurt:
-        config["use_bleurt"] = True
     if args.dataset:
         config["dataset"] = args.dataset
     if args.qmsum_num_samples is not None:
@@ -187,11 +182,28 @@ def get_output_dir(config, model_path):
         return Path(model_path).parent / f"{Path(model_path).name}-ffn-finetuned"
 
 
+def get_metric_for_best_model(dataset_name):
+    if dataset_name == "truthfulqa":
+        return "eval_bleurt_max_score"
+    elif dataset_name == "qmsum":
+        return "eval_rouge2"
+    elif dataset_name == "both":
+        return "eval_bleurt_max_score"
+    else:
+        return "eval_loss"
+
+
+def get_greater_is_better(dataset_name):
+    if dataset_name in ["truthfulqa", "qmsum", "both"]:
+        return True
+    else:
+        return False
+
+
 def main():
     args = parse_args()
     config, training_config = load_config(args)
     
-    use_bleurt = config.get("use_bleurt", False)
     model_path = config["model_path"]
     output_dir = get_output_dir(config, model_path)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -221,18 +233,19 @@ def main():
     dataset_name = config.get("dataset", "truthfulqa")
     logger.info(f"Preparing dataset: {dataset_name}...")
     
+    keep_metadata_for_eval = True
     if dataset_name == "truthfulqa":
         dataset = prepare_truthfulqa_dataset(
             tokenizer,
             max_length=training_config["max_length"],
-            keep_metadata=use_bleurt,
+            keep_metadata=keep_metadata_for_eval,
             model_type="causal"
         )
     elif dataset_name == "qmsum":
         dataset = prepare_qmsum_dataset(
             tokenizer,
             max_length=training_config["max_length"],
-            keep_metadata=use_bleurt,
+            keep_metadata=keep_metadata_for_eval,
             model_type="causal",
             num_samples=config.get("qmsum_num_samples")
         )
@@ -240,13 +253,13 @@ def main():
         truthfulqa_ds = prepare_truthfulqa_dataset(
             tokenizer,
             max_length=training_config["max_length"],
-            keep_metadata=use_bleurt,
+            keep_metadata=keep_metadata_for_eval,
             model_type="causal"
         )
         qmsum_ds = prepare_qmsum_dataset(
             tokenizer,
             max_length=training_config["max_length"],
-            keep_metadata=use_bleurt,
+            keep_metadata=keep_metadata_for_eval,
             model_type="causal",
             num_samples=config.get("qmsum_num_samples")
         )
@@ -280,8 +293,8 @@ def main():
         save_strategy="epoch",
         save_total_limit=2,
         load_best_model_at_end=True,
-        metric_for_best_model="eval_bleurt_score" if use_bleurt else "eval_loss",
-        greater_is_better=True if use_bleurt else False,
+        metric_for_best_model=get_metric_for_best_model(dataset_name),
+        greater_is_better=get_greater_is_better(dataset_name),
         fp16=use_cuda,
         bf16=use_mps,
         dataloader_num_workers=0 if use_mps else 2,
@@ -291,27 +304,22 @@ def main():
     
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
     
-    trainer_class = BLEURTTrainer if use_bleurt else Trainer
-    trainer_kwargs = {
-        "model": model,
-        "args": training_args,
-        "train_dataset": dataset["train"],
-        "eval_dataset": dataset["test"],
-        "data_collator": data_collator,
-        "tokenizer": tokenizer,
-    }
-    
-    if use_bleurt:
-        trainer_kwargs["eval_dataset_with_answers"] = dataset["test"]
-        trainer_kwargs["model_type"] = "causal"
-    
-    trainer = trainer_class(**trainer_kwargs)
+    trainer = DatasetEvalTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=dataset["train"],
+        eval_dataset=dataset["test"],
+        data_collator=data_collator,
+        tokenizer=tokenizer,
+        eval_dataset_with_answers=dataset["test"],
+        model_type="causal",
+        dataset_type=dataset_name,
+    )
     
     logger.info("Training configuration:")
     logger.info(f"  Epochs: {training_config['num_epochs']}, "
                 f"Batch size: {training_config['batch_size']}, "
-                f"LR: {training_config['learning_rate']}, "
-                f"BLEURT: {use_bleurt}\n")
+                f"LR: {training_config['learning_rate']}\n")
     
     logger.info("Starting training...")
     logger.info("=" * 60)

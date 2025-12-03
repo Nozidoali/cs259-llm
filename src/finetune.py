@@ -65,6 +65,8 @@ def prepare_truthfulqa_dataset(tokenizer, max_length=512, keep_metadata=False, m
         if keep_metadata:
             result["question"] = question
             result["best_answer"] = best_answer
+            result["correct_answers"] = ex.get("correct_answers", [])
+            result["incorrect_answers"] = ex.get("incorrect_answers", [])
         return result
     
     formatted = ds.map(format_example)
