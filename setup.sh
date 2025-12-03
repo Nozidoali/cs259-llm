@@ -25,27 +25,11 @@ pip install --upgrade pip setuptools wheel
 
 echo "Installing PyTorch with CUDA support..."
 # Install PyTorch with CUDA 12.1 (adjust version if needed for your runpod)
+# Note: If PyTorch is already in the base image, you can skip this step
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-echo "Installing other dependencies..."
-pip install "transformers>=4.30.0"
-pip install "datasets<2.17.0"
-pip install "accelerate>=0.20.0"
-pip install "numpy<2.0.0"
-pip install "huggingface_hub>=0.16.0"
-pip install "evaluate>=0.4.0"
-pip install "python-dotenv>=1.0.0"
-pip install sentencepiece
-pip install protobuf
-pip install rouge_score nltk
-pip install tf-keras==2.16.0
-pip install scikit-learn
-
-echo "Installing TensorFlow (for BLEURT)..."
-pip install tensorflow
-
-echo "Installing BLEURT..."
-pip install "git+https://github.com/google-research/bleurt.git"
+echo "Installing dependencies from requirements.txt..."
+pip install -r requirements.txt
 
 echo ""
 echo "✓ Environment setup complete!"
