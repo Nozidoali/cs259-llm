@@ -1,0 +1,31 @@
+# Requirements for CS259-LLM project
+# Base image: runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
+# PyTorch 2.8.0 with CUDA 12.8.1 is already included in the base image
+
+# Core ML libraries
+transformers>=4.30.0
+datasets<2.17.0
+accelerate>=0.20.0
+numpy<2.0.0
+
+# HuggingFace ecosystem
+huggingface_hub>=0.16.0
+
+# Evaluation and metrics
+evaluate>=0.4.0
+rouge_score
+nltk
+
+# Utilities
+python-dotenv>=1.0.0
+sentencepiece
+protobuf
+scikit-learn
+
+# TensorFlow and Keras (for BLEURT)
+tensorflow
+tf-keras
+
+# BLEURT (installed from git)
+git+https://github.com/google-research/bleurt.git
+
