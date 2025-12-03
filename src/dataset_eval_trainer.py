@@ -13,11 +13,12 @@ from config import BLEURT_CONFIG, DATASET_CONFIG
 logger = logging.getLogger(__name__)
 
 class DatasetEvalTrainer(Trainer):
-    def __init__(self, *args, eval_dataset_with_answers=None, model_type="causal", dataset_type="truthfulqa", **kwargs):
+    def __init__(self, *args, eval_dataset_with_answers=None, model_type="causal", dataset_type="truthfulqa", qmsum_max_new_tokens=200, **kwargs):
         super().__init__(*args, **kwargs)
         self.eval_dataset_with_answers = eval_dataset_with_answers
         self.model_type = model_type
         self.dataset_type = dataset_type
+        self.qmsum_max_new_tokens = qmsum_max_new_tokens
         self._bleurt = None
         self._rouge = None
     
@@ -147,7 +148,7 @@ class DatasetEvalTrainer(Trainer):
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
-                    max_new_tokens=200,
+                    max_new_tokens=self.qmsum_max_new_tokens,
                     do_sample=False,
                     pad_token_id=self.tokenizer.eos_token_id if hasattr(self.tokenizer, "eos_token_id") else self.tokenizer.pad_token_id,
                 )

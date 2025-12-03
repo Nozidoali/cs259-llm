@@ -137,6 +137,8 @@ def parse_args():
                        help="Dataset to use for fine-tuning (default: truthfulqa)")
     parser.add_argument("--qmsum_num_samples", type=int, default=None,
                        help="Number of QMSum samples to load (default: all samples)")
+    parser.add_argument("--qmsum_max_new_tokens", type=int, default=200,
+                       help="Maximum number of new tokens to generate for QMSum evaluation (default: 200)")
     
     return parser.parse_args()
 
@@ -167,6 +169,8 @@ def load_config(args):
         config["dataset"] = args.dataset
     if args.qmsum_num_samples is not None:
         config["qmsum_num_samples"] = args.qmsum_num_samples
+    if args.qmsum_max_new_tokens is not None:
+        config["qmsum_max_new_tokens"] = args.qmsum_max_new_tokens
     
     return config, training_config
 
@@ -314,6 +318,7 @@ def main():
         eval_dataset_with_answers=dataset["test"],
         model_type="causal",
         dataset_type=dataset_name,
+        qmsum_max_new_tokens=config.get("qmsum_max_new_tokens", 200),
     )
     
     logger.info("Training configuration:")
