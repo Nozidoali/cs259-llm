@@ -98,63 +98,33 @@ def prepare_truthfulqa_dataset(tokenizer, max_length=512, keep_metadata=False, m
 
 
 def prepare_qmsum_dataset(tokenizer, max_length=512, keep_metadata=False, model_type="causal", split="test", num_samples=None):
-    """Prepare LongBench QMSum dataset for fine-tuning.
-    
-    Args:
-        tokenizer: Tokenizer to use for tokenization
-        max_length: Maximum sequence length
-        keep_metadata: Whether to keep metadata fields in the dataset
-        model_type: Type of model ("causal" or "seq2seq")
-        split: Dataset split to load ("train", "test", "validation")
-        num_samples: Number of samples to load. If None, loads all samples.
-    """
+    """Prepare LongBench QMSum dataset for fine-tuning."""
     try:
         ds = load_dataset("THUDM/LongBench", "qmsum", split=split)
-    except Exception as e:
-        # Fallback to loading from URL
+    except Exception:
         try:
             ds = load_dataset("json", data_files="https://huggingface.co/datasets/THUDM/LongBench/resolve/main/data/qmsum.jsonl", split="train")
-        except Exception as e2:
-            raise ValueError(f"Failed to load QMSum dataset: {e2}")
+        except Exception as e:
+            raise ValueError(f"Failed to load QMSum dataset: {e}")
     
-    # Limit the number of samples if specified
     if num_samples is not None:
-        total_samples = len(ds)
-        num_samples = min(num_samples, total_samples)
-        if num_samples < total_samples:
-            print(f"Limiting QMSum dataset to {num_samples} samples (out of {total_samples} total)")
+        num_samples = min(num_samples, len(ds))
         ds = ds.select(range(num_samples))
     
     def format_example(ex):
         context = ex.get("context", "")
         input_text = ex.get("input", "")
         answers = ex.get("answers", [])
-        
-        # Get the first answer if answers is a list, otherwise use answers directly
-        if isinstance(answers, list) and len(answers) > 0:
-            answer = answers[0]
-        elif isinstance(answers, str):
-            answer = answers
-        else:
-            answer = ""
-        
-        # Combine context and input for the prompt
-        if input_text:
-            prompt = f"{context}\n\n{input_text}" if context else input_text
-        else:
-            prompt = context
+        answer = answers[0] if isinstance(answers, list) and answers else (answers if isinstance(answers, str) else "")
+        prompt = f"{context}\n\n{input_text}" if context and input_text else (input_text or context)
         
         if model_type == "seq2seq":
             result = {"input": prompt, "target": answer}
         else:
-            # Format as: Context + Input -> Answer
-            text = f"{prompt}\n\nSummary: {answer}"
-            result = {"text": text}
+            result = {"text": f"{prompt}\n\nSummary: {answer}"}
         
         if keep_metadata:
-            result["context"] = context
-            result["input"] = input_text
-            result["answer"] = answer
+            result.update({"context": context, "input": input_text, "answer": answer})
         return result
     
     formatted = ds.map(format_example)
@@ -162,27 +132,15 @@ def prepare_qmsum_dataset(tokenizer, max_length=512, keep_metadata=False, model_
     if model_type == "seq2seq":
         def tokenize_seq2seq(examples):
             inputs = tokenizer(examples["input"], truncation=True, max_length=max_length, padding="max_length")
-            targets = tokenizer(examples["target"], truncation=True, max_length=max_length, padding="max_length")
-            inputs["labels"] = targets["input_ids"]
+            inputs["labels"] = tokenizer(examples["target"], truncation=True, max_length=max_length, padding="max_length")["input_ids"]
             return inputs
         
-        tokenized = formatted.map(
-            tokenize_seq2seq,
-            batched=True,
-            remove_columns=["input", "target"] if not keep_metadata else ["input", "target"],
-            desc="Tokenizing QMSum dataset",
-        )
+        tokenized = formatted.map(tokenize_seq2seq, batched=True, remove_columns=["input", "target"] if not keep_metadata else ["input", "target"])
     else:
         tokenized = formatted.map(
-            lambda examples: tokenizer(
-                examples["text"],
-                truncation=True,
-                max_length=max_length,
-                padding="max_length",
-            ),
+            lambda examples: tokenizer(examples["text"], truncation=True, max_length=max_length, padding="max_length"),
             batched=True,
-            remove_columns=["text"] if not keep_metadata else [],
-            desc="Tokenizing QMSum dataset",
+            remove_columns=["text"] if not keep_metadata else []
         )
     return tokenized
 
