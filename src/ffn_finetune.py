@@ -23,8 +23,9 @@ from transformers import (
 sys.path.insert(0, os.path.dirname(__file__))
 
 from config import TRAINING_CONFIG, MODELS_DIR
-from finetune import prepare_truthfulqa_dataset
+from finetune import prepare_truthfulqa_dataset, prepare_qmsum_dataset
 from bleurt_trainer import BLEURTTrainer
+from datasets import concatenate_datasets
 
 logging.basicConfig(
     level=logging.INFO,
@@ -134,6 +135,11 @@ def parse_args():
     
     parser.add_argument("--use_bleurt", action="store_true",
                        help="Use BLEURT evaluation during training")
+    parser.add_argument("--dataset", type=str, default="truthfulqa",
+                       choices=["truthfulqa", "qmsum", "both"],
+                       help="Dataset to use for fine-tuning (default: truthfulqa)")
+    parser.add_argument("--qmsum_num_samples", type=int, default=None,
+                       help="Number of QMSum samples to load (default: all samples)")
     
     return parser.parse_args()
 
@@ -162,6 +168,10 @@ def load_config(args):
         config["output_dir"] = args.output_dir
     if args.use_bleurt:
         config["use_bleurt"] = True
+    if args.dataset:
+        config["dataset"] = args.dataset
+    if args.qmsum_num_samples is not None:
+        config["qmsum_num_samples"] = args.qmsum_num_samples
     
     return config, training_config
 
@@ -208,13 +218,50 @@ def main():
         raise ValueError("No trainable parameters found! Check model architecture.")
     logger.info("")
     
-    logger.info("Preparing TruthfulQA dataset...")
-    dataset = prepare_truthfulqa_dataset(
-        tokenizer,
-        max_length=training_config["max_length"],
-        keep_metadata=use_bleurt,
-        model_type="causal"
-    )
+    dataset_name = config.get("dataset", "truthfulqa")
+    logger.info(f"Preparing dataset: {dataset_name}...")
+    
+    if dataset_name == "truthfulqa":
+        dataset = prepare_truthfulqa_dataset(
+            tokenizer,
+            max_length=training_config["max_length"],
+            keep_metadata=use_bleurt,
+            model_type="causal"
+        )
+    elif dataset_name == "qmsum":
+        num_samples = config.get("qmsum_num_samples")
+        if num_samples is not None:
+            logger.info(f"Loading {num_samples} QMSum samples...")
+        dataset = prepare_qmsum_dataset(
+            tokenizer,
+            max_length=training_config["max_length"],
+            keep_metadata=use_bleurt,
+            model_type="causal",
+            num_samples=num_samples
+        )
+    elif dataset_name == "both":
+        logger.info("Loading TruthfulQA dataset...")
+        truthfulqa_ds = prepare_truthfulqa_dataset(
+            tokenizer,
+            max_length=training_config["max_length"],
+            keep_metadata=use_bleurt,
+            model_type="causal"
+        )
+        logger.info("Loading QMSum dataset...")
+        num_samples = config.get("qmsum_num_samples")
+        if num_samples is not None:
+            logger.info(f"Loading {num_samples} QMSum samples...")
+        qmsum_ds = prepare_qmsum_dataset(
+            tokenizer,
+            max_length=training_config["max_length"],
+            keep_metadata=use_bleurt,
+            model_type="causal",
+            num_samples=num_samples
+        )
+        logger.info(f"Combining datasets: {len(truthfulqa_ds)} TruthfulQA + {len(qmsum_ds)} QMSum samples")
+        dataset = concatenate_datasets([truthfulqa_ds, qmsum_ds])
+    else:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
     
     dataset = dataset.train_test_split(
         test_size=training_config["eval_split"],
