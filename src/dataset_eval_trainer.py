@@ -140,6 +140,9 @@ class DatasetEvalTrainer(Trainer):
             inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
             inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
             
+            prompt_len = len(prompt)
+            logger.info(f"[{self.dataset_type}] Example {i+1}: prompt_len={prompt_len}, input_ids_len={inputs['input_ids'].shape[1]}")
+            
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
@@ -149,12 +152,21 @@ class DatasetEvalTrainer(Trainer):
                 )
             
             generated = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            generated_len = len(generated)
+            logger.info(f"[{self.dataset_type}] Example {i+1}: generated_len={generated_len}, generated_preview={generated[:200]}...")
+            
             if "Summary:" in generated:
                 pred = generated.split("Summary:")[-1].strip()
+                logger.info(f"[{self.dataset_type}] Example {i+1}: Found 'Summary:' in generated, extracted pred")
             else:
-                pred = generated[len(prompt):].strip()
+                if generated_len > prompt_len:
+                    pred = generated[prompt_len:].strip()
+                    logger.info(f"[{self.dataset_type}] Example {i+1}: No 'Summary:' found, extracting after prompt (generated_len={generated_len} > prompt_len={prompt_len})")
+                else:
+                    pred = ""
+                    logger.warning(f"[{self.dataset_type}] Example {i+1}: Generated text is not longer than prompt (generated_len={generated_len} <= prompt_len={prompt_len})")
             
-            logger.info(f"[{self.dataset_type}] Example {i+1}: pred_len={len(pred)}, pred_preview={pred[:100]}...")
+            logger.info(f"[{self.dataset_type}] Example {i+1}: pred_len={len(pred)}, pred_preview={pred[:100] if pred else '(empty)'}...")
             
             if pred and answer:
                 predictions.append(pred)
