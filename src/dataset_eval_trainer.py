@@ -6,8 +6,11 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 import torch
 import numpy as np
+import logging
 from transformers import Trainer
 from config import BLEURT_CONFIG, DATASET_CONFIG
+
+logger = logging.getLogger(__name__)
 
 class DatasetEvalTrainer(Trainer):
     def __init__(self, *args, eval_dataset_with_answers=None, model_type="causal", dataset_type="truthfulqa", **kwargs):
@@ -154,17 +157,18 @@ class DatasetEvalTrainer(Trainer):
         
         if not predictions:
             metrics = {
-                f"{metric_key_prefix}_rouge2": 0.0
+                f"{metric_key_prefix}_rougeL": 0.0
             }
             self.log(metrics)
             return metrics
         
         result = self.rouge.compute(predictions=predictions, references=references, use_stemmer=True)
-        rouge2 = result.get("rouge2", 0.0)
+        rougeL = result.get("rougeL", 0.0)
         
         metrics = {
-            f"{metric_key_prefix}_rouge2": rouge2
+            f"{metric_key_prefix}_rougeL": rougeL
         }
         self.log(metrics)
+        logger.info(f"{metric_key_prefix}_rougeL: {rougeL:.6f}")
         return metrics
 

@@ -186,7 +186,7 @@ def get_metric_for_best_model(dataset_name):
     if dataset_name == "truthfulqa":
         return "eval_bleurt_max_score"
     elif dataset_name == "qmsum":
-        return "eval_rouge2"
+        return "eval_rougeL"
     elif dataset_name == "both":
         return "eval_bleurt_max_score"
     else:
