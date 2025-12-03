@@ -124,12 +124,15 @@ class DatasetEvalTrainer(Trainer):
         predictions = []
         references = []
         
-        for example in eval_dataset:
+        for i, example in enumerate(eval_dataset):
             context = example.get("context", "")
             input_text = example.get("input", "")
             answer = example.get("answer", "")
             
+            logger.info(f"[{self.dataset_type}] Example {i+1}: context_len={len(context)}, input_len={len(input_text)}, answer_len={len(answer)}")
+            
             if not answer:
+                logger.warning(f"[{self.dataset_type}] Example {i+1}: Skipping - no answer")
                 continue
             
             prompt = f"{context}\n\n{input_text}" if context and input_text else (input_text or context)
@@ -151,9 +154,13 @@ class DatasetEvalTrainer(Trainer):
             else:
                 pred = generated[len(prompt):].strip()
             
+            logger.info(f"[{self.dataset_type}] Example {i+1}: pred_len={len(pred)}, pred_preview={pred[:100]}...")
+            
             if pred and answer:
                 predictions.append(pred)
                 references.append(answer)
+            else:
+                logger.warning(f"[{self.dataset_type}] Example {i+1}: Skipping - empty prediction or answer")
         
         if not predictions:
             metrics = {
@@ -169,6 +176,6 @@ class DatasetEvalTrainer(Trainer):
             f"{metric_key_prefix}_rougeL": rougeL
         }
         self.log(metrics)
-        logger.info(f"{metric_key_prefix}_rougeL: {rougeL:.6f}")
+        logger.info(f"[{self.dataset_type}] {metric_key_prefix}_rougeL: {rougeL:.6f}")
         return metrics
 
