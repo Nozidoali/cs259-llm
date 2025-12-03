@@ -12,12 +12,12 @@ LLAMA_CPP_DIR = Path(llama_cpp_env) if llama_cpp_env else Path("/Users/hanyu/Doc
 if not WORK_DIR.exists() or not WORK_DIR.is_dir():
     raise ValueError(f"WORK_DIR does not exist or is not a directory: {WORK_DIR}")
 
-if not LLAMA_CPP_DIR.exists() or not LLAMA_CPP_DIR.is_dir():
-    raise ValueError(f"LLAMA_CPP_DIR does not exist or is not a directory: {LLAMA_CPP_DIR}")
+# if not LLAMA_CPP_DIR.exists() or not LLAMA_CPP_DIR.is_dir():
+#     raise ValueError(f"LLAMA_CPP_DIR does not exist or is not a directory: {LLAMA_CPP_DIR}")
 
 convert_script = LLAMA_CPP_DIR / "convert_hf_to_gguf.py"
-if not convert_script.exists():
-    raise ValueError(f"convert_hf_to_gguf.py not found in LLAMA_CPP_DIR: {LLAMA_CPP_DIR}")
+# if not convert_script.exists():
+#     raise ValueError(f"convert_hf_to_gguf.py not found in LLAMA_CPP_DIR: {LLAMA_CPP_DIR}")
 
 MODELS_DIR = WORK_DIR / "models"
 GGUF_OUTPUT_DIR = MODELS_DIR / "gguf"
