@@ -140,8 +140,9 @@ class DatasetEvalTrainer(Trainer):
             inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
             inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
             
-            prompt_len = len(prompt)
-            logger.info(f"[{self.dataset_type}] Example {i+1}: prompt_len={prompt_len}, input_ids_len={inputs['input_ids'].shape[1]}")
+            input_ids_len = inputs['input_ids'].shape[1]
+            logger.info(f"[{self.dataset_type}] Example {i+1}: prompt_len={len(prompt)}, input_ids_len={input_ids_len}")
+            logger.info(f"[{self.dataset_type}] Example {i+1}: prompt_preview={prompt[:300]}...")
             
             with torch.no_grad():
                 outputs = self.model.generate(
@@ -151,22 +152,14 @@ class DatasetEvalTrainer(Trainer):
                     pad_token_id=self.tokenizer.eos_token_id if hasattr(self.tokenizer, "eos_token_id") else self.tokenizer.pad_token_id,
                 )
             
-            generated = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            generated_len = len(generated)
-            logger.info(f"[{self.dataset_type}] Example {i+1}: generated_len={generated_len}, generated_preview={generated[:200]}...")
+            # Extract only the newly generated tokens (after the input)
+            generated_ids = outputs[0][input_ids_len:]
+            pred = self.tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
             
-            if "Summary:" in generated:
-                pred = generated.split("Summary:")[-1].strip()
-                logger.info(f"[{self.dataset_type}] Example {i+1}: Found 'Summary:' in generated, extracted pred")
-            else:
-                if generated_len > prompt_len:
-                    pred = generated[prompt_len:].strip()
-                    logger.info(f"[{self.dataset_type}] Example {i+1}: No 'Summary:' found, extracting after prompt (generated_len={generated_len} > prompt_len={prompt_len})")
-                else:
-                    pred = ""
-                    logger.warning(f"[{self.dataset_type}] Example {i+1}: Generated text is not longer than prompt (generated_len={generated_len} <= prompt_len={prompt_len})")
-            
-            logger.info(f"[{self.dataset_type}] Example {i+1}: pred_len={len(pred)}, pred_preview={pred[:100] if pred else '(empty)'}...")
+            # Also decode the full output for logging
+            full_output = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            logger.info(f"[{self.dataset_type}] Example {i+1}: full_output_preview={full_output[:300]}...")
+            logger.info(f"[{self.dataset_type}] Example {i+1}: generated_tokens={len(generated_ids)}, pred_len={len(pred)}, pred={pred}")
             
             if pred and answer:
                 predictions.append(pred)
