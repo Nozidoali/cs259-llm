@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import sys
 import logging
 from pathlib import Path
 from typing import Optional
@@ -8,6 +9,11 @@ import torch
 import numpy as np
 from datasets import load_dataset, Dataset, DatasetDict
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+_file_dir = os.path.dirname(os.path.abspath(__file__))
+sys_path = os.path.dirname(_file_dir)
+if sys_path not in sys.path:
+    sys.path.insert(0, sys_path)
 
 from config import (
     TRUTHFULQA_CACHE_DIR,
@@ -47,7 +53,10 @@ def load_base_model_for_embeddings(base_model: str):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
-    model = AutoModelForCausalLM.from_pretrained(model_path, dtype=torch.float32)
+    if torch.cuda.is_available():
+        model = AutoModelForCausalLM.from_pretrained(model_path, dtype=torch.float16)
+    else:
+        model = AutoModelForCausalLM.from_pretrained(model_path, dtype=torch.float32)
     model.eval()
     
     if hasattr(model, 'model') and hasattr(model.model, 'embed_tokens'):
@@ -89,9 +98,9 @@ def extract_embeddings(model, tokenizer, texts, max_length=512, batch_size=8, de
             else:
                 raise ValueError("Could not find embedding layer in model")
             
-            mask_expanded = attention_mask.unsqueeze(-1).expand(embeddings.size()).float()
+            mask_expanded = attention_mask.unsqueeze(-1).expand(embeddings.size()).to(embeddings.dtype)
             sum_embeddings = torch.sum(embeddings * mask_expanded, dim=1)
-            sum_mask = torch.clamp(attention_mask.sum(dim=1, keepdim=True), min=1e-9)
+            sum_mask = torch.clamp(attention_mask.sum(dim=1, keepdim=True), min=1e-9).to(embeddings.dtype)
             mean_embeddings = sum_embeddings / sum_mask
         
         all_embeddings.append(mean_embeddings.cpu().numpy())
@@ -200,3 +209,4 @@ def prepare_gating_dataset(
     dataset_dict.save_to_disk(str(cache_dir))
     
     return dataset_dict
+

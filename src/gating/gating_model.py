@@ -21,18 +21,24 @@ class GatingNetwork(nn.Module):
                 layers.append(nn.Dropout(dropout))
             prev_dim = hidden_dim
         
-        layers.append(nn.Linear(prev_dim, 1))
-        layers.append(nn.Sigmoid())
+        layers.append(nn.Linear(prev_dim, 2))
         
         self.network = nn.Sequential(*layers)
+        self.softmax = nn.Softmax(dim=-1)
         
         logger.info(f"Initialized GatingNetwork: input_dim={input_dim}, "
-                   f"hidden_dims={hidden_dims}, dropout={dropout}")
+                   f"hidden_dims={hidden_dims}, dropout={dropout}, output_classes=2")
     
     def forward(self, x):
+        logits = self.network(x)
+        probs = self.softmax(logits)
+        return probs
+    
+    def get_logits(self, x):
         return self.network(x)
     
-    def predict(self, x, threshold=0.5):
+    def predict(self, x):
         with torch.no_grad():
             probs = self.forward(x)
-            return (probs >= threshold).long()
+            return probs.argmax(dim=-1)
+

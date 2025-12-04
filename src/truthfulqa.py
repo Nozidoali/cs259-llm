@@ -58,7 +58,6 @@ def get_truthfulqa_score(script_path="./scripts/run-cli.sh", num_samples=100, nu
         
         proc = subprocess.run(cmd, capture_output=True, text=True)
         
-        # Log stdout and stderr
         if proc.stdout:
             logger.debug(f"Sample {i} stdout:\n{proc.stdout}")
         if proc.stderr:

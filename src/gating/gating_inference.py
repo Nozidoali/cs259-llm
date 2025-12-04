@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
 
+import os
+import sys
 import json
 import logging
 from pathlib import Path
 from typing import Union, Optional
 import torch
 
+_file_dir = os.path.dirname(os.path.abspath(__file__))
+sys_path = os.path.dirname(_file_dir)
+if sys_path not in sys.path:
+    sys.path.insert(0, sys_path)
+
 from config import GATING_MODEL_DIR
-from gating_dataset import load_base_model_for_embeddings, extract_embeddings
-from gating_model import GatingNetwork
+from gating.gating_dataset import load_base_model_for_embeddings, extract_embeddings
+from gating.gating_model import GatingNetwork
 
 logger = logging.getLogger(__name__)
 
@@ -63,38 +70,42 @@ class GatingNetworkInference:
         self.gating_model.eval()
         logger.info("Gating network loaded successfully")
     
-    def classify(self, text: str, threshold: float = 0.5) -> dict:
+    def classify(self, text: str) -> dict:
         embeddings = extract_embeddings(
             self.base_model, self.tokenizer, [text], max_length=512, batch_size=1, device=self.device
         )
         embedding_tensor = torch.tensor(embeddings, dtype=torch.float32).to(self.device)
         
         with torch.no_grad():
-            probability = self.gating_model(embedding_tensor).item()
+            probs = self.gating_model(embedding_tensor)
+            probs_np = probs.cpu().numpy()[0]
         
-        prediction = 1 if probability >= threshold else 0
+        prediction = int(probs.argmax(dim=-1).item())
         return {
-            "probability": probability,
+            "model1_prob": float(probs_np[0]),
+            "model2_prob": float(probs_np[1]),
             "prediction": prediction,
             "is_summarization": prediction == 1,
         }
     
-    def classify_batch(self, texts: list, threshold: float = 0.5) -> list:
+    def classify_batch(self, texts: list) -> list:
         embeddings = extract_embeddings(
             self.base_model, self.tokenizer, texts, max_length=512, batch_size=8, device=self.device
         )
         embedding_tensor = torch.tensor(embeddings, dtype=torch.float32).to(self.device)
         
         with torch.no_grad():
-            probabilities = self.gating_model(embedding_tensor).cpu().numpy().flatten()
+            probs = self.gating_model(embedding_tensor)
+            probs_np = probs.cpu().numpy()
+            predictions = probs.argmax(dim=-1).cpu().numpy()
         
         results = []
-        for prob in probabilities:
-            prediction = 1 if prob >= threshold else 0
+        for i, (prob_row, pred) in enumerate(zip(probs_np, predictions)):
             results.append({
-                "probability": float(prob),
-                "prediction": prediction,
-                "is_summarization": prediction == 1,
+                "model1_prob": float(prob_row[0]),
+                "model2_prob": float(prob_row[1]),
+                "prediction": int(pred),
+                "is_summarization": int(pred) == 1,
             })
         return results
 
@@ -114,3 +125,4 @@ def load_gating_network(model_path: Union[str, Path], base_model: Optional[str] 
             raise ValueError("base_model not specified and training_info.json not found")
     
     return GatingNetworkInference(model_path, base_model, device)
+

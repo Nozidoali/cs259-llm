@@ -16,11 +16,14 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
-sys.path.insert(0, os.path.dirname(__file__))
+_file_dir = os.path.dirname(os.path.abspath(__file__))
+sys_path = os.path.dirname(_file_dir)
+if sys_path not in sys.path:
+    sys.path.insert(0, sys_path)
 
 from config import GATING_CONFIG, GATING_MODEL_DIR
-from gating_dataset import prepare_gating_dataset
-from gating_model import GatingNetwork
+from gating.gating_dataset import prepare_gating_dataset
+from gating.gating_model import GatingNetwork
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,11 +35,11 @@ logger = logging.getLogger(__name__)
 
 def collate_fn(batch):
     embeddings = torch.tensor([item["embedding"] for item in batch], dtype=torch.float32)
-    labels = torch.tensor([item["label"] for item in batch], dtype=torch.float32).unsqueeze(1)
+    labels = torch.tensor([item["label"] for item in batch], dtype=torch.long)
     return {"embedding": embeddings, "label": labels}
 
 
-def train_epoch(model, dataloader, criterion, optimizer, device, pos_weight=None):
+def train_epoch(model, dataloader, criterion, optimizer, device, class_weights=None):
     model.train()
     total_loss = 0.0
     all_preds = []
@@ -47,18 +50,14 @@ def train_epoch(model, dataloader, criterion, optimizer, device, pos_weight=None
         labels = batch["label"].to(device)
         
         optimizer.zero_grad()
+        logits = model.get_logits(embeddings)
+        loss = criterion(logits, labels)
         outputs = model(embeddings)
-        loss = criterion(outputs, labels)
-        if pos_weight is not None:
-            weights = torch.where(labels == 1, pos_weight, torch.tensor(1.0).to(device))
-            loss = (loss * weights).mean()
-        else:
-            loss = loss.mean()
         loss.backward()
         optimizer.step()
         
         total_loss += loss.item()
-        preds = (outputs >= 0.5).long().cpu().numpy()
+        preds = outputs.argmax(dim=-1).cpu().numpy()
         all_preds.extend(preds.flatten())
         all_labels.extend(labels.cpu().numpy().flatten())
     
@@ -68,7 +67,7 @@ def train_epoch(model, dataloader, criterion, optimizer, device, pos_weight=None
     return avg_loss, accuracy, f1
 
 
-def evaluate(model, dataloader, criterion, device, pos_weight=None):
+def evaluate(model, dataloader, criterion, device, class_weights=None):
     model.eval()
     total_loss = 0.0
     all_preds = []
@@ -79,16 +78,12 @@ def evaluate(model, dataloader, criterion, device, pos_weight=None):
             embeddings = batch["embedding"].to(device)
             labels = batch["label"].to(device)
             
+            logits = model.get_logits(embeddings)
+            loss = criterion(logits, labels)
             outputs = model(embeddings)
-            loss = criterion(outputs, labels)
-            if pos_weight is not None:
-                weights = torch.where(labels == 1, pos_weight, torch.tensor(1.0).to(device))
-                loss = (loss * weights).mean()
-            else:
-                loss = loss.mean()
             
             total_loss += loss.item()
-            preds = (outputs >= 0.5).long().cpu().numpy()
+            preds = outputs.argmax(dim=-1).cpu().numpy()
             all_preds.extend(preds.flatten())
             all_labels.extend(labels.cpu().numpy().flatten())
     
@@ -204,9 +199,12 @@ def main():
     train_labels = [item["label"] for item in dataset["train"]]
     num_pos = sum(train_labels)
     num_neg = len(train_labels) - num_pos
-    pos_weight = torch.tensor(num_neg / num_pos if num_pos > 0 else 1.0).to(device)
-    criterion = nn.BCELoss(reduction='none')
-    logger.info(f"Class weights - Positive (summarization): {pos_weight.item():.2f}x\n")
+    total = len(train_labels)
+    weight_0 = total / (2 * num_neg) if num_neg > 0 else 1.0
+    weight_1 = total / (2 * num_pos) if num_pos > 0 else 1.0
+    class_weights = torch.tensor([weight_0, weight_1]).to(device)
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    logger.info(f"Class weights - Class 0: {weight_0:.2f}, Class 1: {weight_1:.2f}\n")
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=config["learning_rate"],
@@ -227,10 +225,10 @@ def main():
     for epoch in range(config["num_epochs"]):
         logger.info(f"Epoch {epoch + 1}/{config['num_epochs']}")
         
-        train_loss, train_acc, train_f1 = train_epoch(model, train_loader, criterion, optimizer, device, pos_weight)
+        train_loss, train_acc, train_f1 = train_epoch(model, train_loader, criterion, optimizer, device, class_weights)
         logger.info(f"  Train - Loss: {train_loss:.4f}, Acc: {train_acc:.4f}, F1: {train_f1:.4f}")
         
-        val_metrics = evaluate(model, val_loader, criterion, device, pos_weight)
+        val_metrics = evaluate(model, val_loader, criterion, device, class_weights)
         logger.info(f"  Val   - Loss: {val_metrics['loss']:.4f}, Acc: {val_metrics['accuracy']:.4f}, "
                    f"F1: {val_metrics['f1']:.4f}, Prec: {val_metrics['precision']:.4f}, "
                    f"Rec: {val_metrics['recall']:.4f}")
@@ -255,7 +253,7 @@ def main():
     
     logger.info("Evaluating on test set...")
     model.load_state_dict(torch.load(output_dir / "best_model.pt", weights_only=True))
-    test_metrics = evaluate(model, test_loader, criterion, device, pos_weight)
+    test_metrics = evaluate(model, test_loader, criterion, device, class_weights)
     logger.info(f"Test - Loss: {test_metrics['loss']:.4f}, Acc: {test_metrics['accuracy']:.4f}, "
                f"F1: {test_metrics['f1']:.4f}, Prec: {test_metrics['precision']:.4f}, "
                f"Rec: {test_metrics['recall']:.4f}")
@@ -281,3 +279,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

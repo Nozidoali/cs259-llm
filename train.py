@@ -20,9 +20,9 @@ from config import (
 )
 from finetune import (
     download_model,
-    load_model_and_tokenizer,
     prepare_truthfulqa_dataset,
 )
+from model_utils import load_model_and_tokenizer
 from convert import convert_to_gguf
 
 logging.basicConfig(
@@ -99,7 +99,7 @@ def run_finetune(config):
         DataCollatorForLanguageModeling,
         DataCollatorForSeq2Seq,
     )
-    from bleurt_trainer import BLEURTTrainer
+    from dataset_eval_trainer import DatasetEvalTrainer
     
     use_mps = torch.backends.mps.is_available()
     use_cuda = torch.cuda.is_available()
@@ -120,7 +120,7 @@ def run_finetune(config):
         save_strategy="epoch",
         save_total_limit=2,
         load_best_model_at_end=True,
-        metric_for_best_model="eval_bleurt_score" if use_bleurt else "eval_loss",
+        metric_for_best_model="eval_bleurt_max_score" if use_bleurt else "eval_loss",
         greater_is_better=True if use_bleurt else False,
         fp16=use_cuda,
         bf16=use_mps,
@@ -130,7 +130,7 @@ def run_finetune(config):
     )
     
     # Setup trainer
-    trainer_class = BLEURTTrainer if use_bleurt else Trainer
+    trainer_class = DatasetEvalTrainer if use_bleurt else Trainer
     data_collator = (
         DataCollatorForSeq2Seq(tokenizer=tokenizer) if model_type == "seq2seq" 
         else DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
@@ -148,6 +148,7 @@ def run_finetune(config):
     if use_bleurt:
         trainer_kwargs["eval_dataset_with_answers"] = dataset["test"]
         trainer_kwargs["model_type"] = model_type
+        trainer_kwargs["dataset_type"] = "truthfulqa"
     
     trainer = trainer_class(**trainer_kwargs)
     

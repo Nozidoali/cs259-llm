@@ -100,14 +100,7 @@ def prepare_truthfulqa_dataset(tokenizer, max_length=512, keep_metadata=False, m
 
 
 def prepare_qmsum_dataset(tokenizer, max_length=512, keep_metadata=False, model_type="causal", split="test", num_samples=None):
-    """Prepare LongBench QMSum dataset for fine-tuning."""
-    try:
-        ds = load_dataset("THUDM/LongBench", "qmsum", split=split)
-    except Exception:
-        try:
-            ds = load_dataset("json", data_files="https://huggingface.co/datasets/THUDM/LongBench/resolve/main/data/qmsum.jsonl", split="train")
-        except Exception as e:
-            raise ValueError(f"Failed to load QMSum dataset: {e}")
+    ds = load_dataset("zai-org/LongBench", "qmsum", split=split, trust_remote_code=True)
     
     if num_samples is not None:
         num_samples = min(num_samples, len(ds))
@@ -145,27 +138,3 @@ def prepare_qmsum_dataset(tokenizer, max_length=512, keep_metadata=False, model_
             remove_columns=["text"] if not keep_metadata else []
         )
     return tokenized
-
-
-def load_model_and_tokenizer(model_key, model_path=None):
-    if model_key not in MODEL_CONFIGS:
-        raise ValueError(f"Unknown model key: {model_key}. Available: {list(MODEL_CONFIGS.keys())}")
-    
-    config = MODEL_CONFIGS[model_key]
-    
-    model_path = download_model(model_key) if model_path is None else Path(model_path)
-    
-    print(f"Loading {config['display_name']} from: {model_path}")
-    tokenizer = AutoTokenizer.from_pretrained(str(model_path))
-    
-    model_type = config.get("model_type", "causal")
-    if model_type == "seq2seq":
-        model = AutoModelForSeq2SeqLM.from_pretrained(str(model_path))
-    else:
-        model = AutoModelForCausalLM.from_pretrained(str(model_path))
-    
-    if hasattr(model, "gradient_checkpointing_enable"):
-        model.gradient_checkpointing_enable()
-    
-    output_dir = MODELS_DIR / config["finetuned_dir"]
-    return model, tokenizer, output_dir, model_type

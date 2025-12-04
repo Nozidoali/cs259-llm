@@ -49,7 +49,6 @@ def get_throughput(script_path="./scripts/run-bench.sh", model=None, config=None
     try:
         cmd = ["bash", script_path]
         env = os.environ.copy()
-        # Use config values if provided, otherwise fall back to model parameter
         if config:
             if config.get("model"):
                 env["M"] = config["model"]

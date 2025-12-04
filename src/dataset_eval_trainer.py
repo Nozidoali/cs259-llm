@@ -153,11 +153,9 @@ class DatasetEvalTrainer(Trainer):
                     pad_token_id=self.tokenizer.eos_token_id if hasattr(self.tokenizer, "eos_token_id") else self.tokenizer.pad_token_id,
                 )
             
-            # Extract only the newly generated tokens (after the input)
             generated_ids = outputs[0][input_ids_len:]
             pred = self.tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
             
-            # Also decode the full output for logging
             full_output = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
             logger.info(f"[{self.dataset_type}] Example {i+1}: full_output_preview={full_output[:300]}...")
             logger.info(f"[{self.dataset_type}] Example {i+1}: generated_tokens={len(generated_ids)}, pred_len={len(pred)}, pred={pred}")

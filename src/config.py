@@ -12,12 +12,7 @@ LLAMA_CPP_DIR = Path(llama_cpp_env) if llama_cpp_env else Path("/Users/hanyu/Doc
 if not WORK_DIR.exists() or not WORK_DIR.is_dir():
     raise ValueError(f"WORK_DIR does not exist or is not a directory: {WORK_DIR}")
 
-# if not LLAMA_CPP_DIR.exists() or not LLAMA_CPP_DIR.is_dir():
-#     raise ValueError(f"LLAMA_CPP_DIR does not exist or is not a directory: {LLAMA_CPP_DIR}")
-
 convert_script = LLAMA_CPP_DIR / "convert_hf_to_gguf.py"
-# if not convert_script.exists():
-#     raise ValueError(f"convert_hf_to_gguf.py not found in LLAMA_CPP_DIR: {LLAMA_CPP_DIR}")
 
 MODELS_DIR = WORK_DIR / "models"
 GGUF_OUTPUT_DIR = MODELS_DIR / "gguf"
@@ -93,20 +88,29 @@ EVALUATION_CONFIG = {
 }
 
 GATING_CONFIG = {
-    "base_model": "qwen2-0.5b",  # Default base model for embeddings
-    "hidden_dims": [512, 256],  # MLP hidden layer dimensions
-    "dropout": 0.1,  # Dropout rate
-    "learning_rate": 1e-4,  # Learning rate for gating network training
-    "batch_size": 32,  # Batch size for training
-    "num_epochs": 10,  # Number of training epochs
-    "weight_decay": 0.01,  # Weight decay
-    "train_split": 0.7,  # Training split
-    "val_split": 0.15,  # Validation split
-    "test_split": 0.15,  # Test split
-    "seed": 42,  # Random seed
+    "base_model": "qwen2-0.5b",
+    "hidden_dims": [512, 256],
+    "dropout": 0.1,
+    "learning_rate": 1e-4,
+    "batch_size": 32,
+    "num_epochs": 10,
+    "weight_decay": 0.01,
+    "train_split": 0.7,
+    "val_split": 0.15,
+    "test_split": 0.15,
+    "seed": 42,
 }
 
 GATING_MODEL_DIR = MODELS_DIR / "gating-network"
+
+MOE_CONFIG = {
+    "model1_path": None,
+    "model2_path": None,
+    "gating_model_path": None,
+    "base_model_path": None,
+    "routing_mode": "weighted_sum",
+    "base_model": "meta-llama/Llama-3.2-1B-Instruct",
+}
 
 for dir_path in [MODELS_DIR, GGUF_OUTPUT_DIR, DATA_DIR, TRUTHFULQA_CACHE_DIR, LOGS_DIR, GATING_MODEL_DIR]:
     dir_path.mkdir(parents=True, exist_ok=True)

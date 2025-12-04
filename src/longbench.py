@@ -18,15 +18,7 @@ def ensure_dir(p):
 
 def load_references():
     logger.info("Loading LongBench qmsum dataset...")
-    try:
-        ds = load_dataset("json", data_files="https://huggingface.co/datasets/THUDM/LongBench/resolve/main/data/qmsum.jsonl", split="train")
-    except Exception as e:
-        logger.warning(f"Error loading from URL: {e}, trying alternative...")
-        try:
-            ds = load_dataset("THUDM/LongBench", "qmsum", split="test")
-        except Exception as e2:
-            logger.error(f"Failed to load dataset: {e2}")
-            raise
+    ds = load_dataset("zai-org/LongBench", "qmsum", split="test", trust_remote_code=True)
     
     ref_map = {}
     for i, rec in enumerate(ds):
@@ -54,12 +46,10 @@ def run_one(cli_path: str, prompt_device_path: str, output_path: str, num_tokens
     
     proc = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
     
-    # Write stdout to output file
     with open(output_path, "w", encoding="utf-8", errors="replace") as fout:
         if proc.stdout:
             fout.write(proc.stdout)
     
-    # Log all stdout and stderr for debugging
     if proc.stdout:
         logger.debug(f"Output for {prompt_device_path} stdout:\n{proc.stdout}")
     if proc.stderr:

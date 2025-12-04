@@ -12,18 +12,14 @@ from pathlib import Path
 from datetime import datetime
 
 import torch
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    TrainingArguments,
-    DataCollatorForLanguageModeling,
-)
+from transformers import TrainingArguments, DataCollatorForLanguageModeling
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from config import TRAINING_CONFIG, MODELS_DIR
 from finetune import prepare_truthfulqa_dataset, prepare_qmsum_dataset
 from dataset_eval_trainer import DatasetEvalTrainer
+from model_utils import freeze_all_except_mlp, count_parameters, load_model_and_tokenizer
 from datasets import concatenate_datasets
 
 logging.basicConfig(
@@ -32,85 +28,6 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
-
-
-def freeze_all_except_mlp(model):
-    for param in model.parameters():
-        param.requires_grad = False
-    
-    mlp_params_count = 0
-    
-    if hasattr(model, 'model') and hasattr(model.model, 'layers'):  # Llama, Qwen, etc.
-        layers = model.model.layers
-        for layer in layers:
-            if hasattr(layer, 'mlp'):
-                for param in layer.mlp.parameters():
-                    param.requires_grad = True
-                    mlp_params_count += 1
-    elif hasattr(model, 'layers'):  # Some models have layers directly
-        layers = model.layers
-        for layer in layers:
-            if hasattr(layer, 'mlp'):
-                for param in layer.mlp.parameters():
-                    param.requires_grad = True
-                    mlp_params_count += 1
-    elif hasattr(model, 'transformer') and hasattr(model.transformer, 'h'):  # GPT-2
-        layers = model.transformer.h
-        for layer in layers:
-            if hasattr(layer, 'mlp'):  # Some GPT-2 variants
-                for param in layer.mlp.parameters():
-                    param.requires_grad = True
-                    mlp_params_count += 1
-            else:  # Standard GPT-2 uses c_fc and c_proj
-                if hasattr(layer, 'c_fc'):
-                    for param in layer.c_fc.parameters():
-                        param.requires_grad = True
-                        mlp_params_count += 1
-                if hasattr(layer, 'c_proj'):
-                    for param in layer.c_proj.parameters():
-                        param.requires_grad = True
-                        mlp_params_count += 1
-    else:
-        raise ValueError(f"Unsupported model architecture. Model type: {type(model).__name__}, attributes: {[attr for attr in dir(model) if not attr.startswith('_')]}")
-    
-    logger.info(f"Unfrozen {mlp_params_count} MLP parameters")
-    return mlp_params_count
-
-
-def count_parameters(model):
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    total_params = sum(p.numel() for p in model.parameters())
-    frozen_params = total_params - trainable_params
-    
-    logger.info(f"Total parameters: {total_params:,}")
-    logger.info(f"Trainable parameters: {trainable_params:,}")
-    logger.info(f"Frozen parameters: {frozen_params:,}")
-    logger.info(f"Trainable percentage: {100 * trainable_params / total_params:.2f}%")
-    
-    return {
-        "total": total_params,
-        "trainable": trainable_params,
-        "frozen": frozen_params,
-        "trainable_percentage": 100 * trainable_params / total_params
-    }
-
-
-def load_model_and_tokenizer(model_path_or_id):
-    local_path = Path(model_path_or_id)
-    if local_path.exists() and local_path.is_dir():
-        model_id = str(local_path)
-        logger.info(f"Loading model from local path: {model_id}")
-    else:
-        model_id = model_path_or_id
-        logger.info(f"Loading model from HuggingFace: {model_id}")
-    
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    
-    model = AutoModelForCausalLM.from_pretrained(model_id, dtype=torch.float32)
-    
-    return model, tokenizer
 
 
 def parse_args():
