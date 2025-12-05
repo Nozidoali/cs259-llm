@@ -14,7 +14,7 @@ if sys_path not in sys.path:
     sys.path.insert(0, sys_path)
 
 from models import load_model_and_tokenizer
-from gating.gatingmodel import GatingNetwork
+from gating.gatingmodel import GatingNetwork, GatingModelWrapper
 from gating.gatingdataset import load_base_model_for_embeddings
 
 logger = logging.getLogger(__name__)
@@ -23,9 +23,28 @@ class MoEFFN(nn.Module):
     def __init__(self, expert_mlps: List, parent_model, routing_mode: Literal["weighted_sum", "select_one"] = "weighted_sum"):
         super().__init__()
         self.expert_mlps = nn.ModuleList(expert_mlps)
-        self.parent_model = parent_model
+        object.__setattr__(self, 'parent_model', parent_model)
         self.routing_mode = routing_mode
         self.num_experts = len(expert_mlps)
+    
+    def state_dict(self, destination=None, prefix='', keep_vars=False):
+        if destination is None:
+            destination = {}
+            destination._metadata = {}
+        
+        destination._metadata[prefix[:-1]] = {}
+        
+        for name, module in self.named_children():
+            if name == 'expert_mlps':  # Only include expert_mlps
+                module.state_dict(destination, prefix + name + '.', keep_vars=keep_vars)
+        
+        # Include parameters and buffers
+        for name, param in self.named_parameters(recurse=False):
+            destination[prefix + name] = param if keep_vars else param.detach()
+        for name, buffer in self.named_buffers(recurse=False):
+            destination[prefix + name] = buffer if keep_vars else buffer.detach()
+        
+        return destination
     
     def forward(self, hidden_states):
         batch_size = hidden_states.shape[0]
@@ -78,9 +97,30 @@ class MoEModel(nn.Module):
             expert_model = expert_model.to(self.device)
             expert_models.append(expert_model)
         logger.info(f"Loading gating network from: {gating_model_path}")
-        base_model_for_emb = load_base_model_for_embeddings(str(base_model_path), device=self.device)
-        gating_model = GatingNetwork.load_from_checkpoint(str(gating_model_path / "gating_network.pt"), base_model=base_model_for_emb, device=self.device)
-        self.gating_model = gating_model.to(self.device)
+        base_model_for_emb, _, embedding_dim = load_base_model_for_embeddings(str(base_model_path))
+        base_model_for_emb = base_model_for_emb.to(self.device)
+        base_model_for_emb.eval()
+        
+        num_classes = len(expert_paths)
+        
+        gating_checkpoint_path = gating_model_path / "gating_network.pt"
+        if not gating_checkpoint_path.exists():
+            gating_checkpoint_path = gating_model_path / "best_model.pt"
+        if not gating_checkpoint_path.exists():
+            raise FileNotFoundError(f"Gating network checkpoint not found at {gating_model_path / 'gating_network.pt'} or {gating_model_path / 'best_model.pt'}")
+        
+        gating_network = GatingNetwork(
+            input_dim=embedding_dim,
+            hidden_dims=[512, 256],
+            dropout=0.1,
+            num_classes=num_classes,
+        )
+        
+        state_dict = torch.load(gating_checkpoint_path, map_location=self.device, weights_only=True)
+        gating_network.load_state_dict(state_dict)
+        gating_network = gating_network.to(self.device)
+        
+        self.gating_model = GatingModelWrapper(base_model_for_emb, gating_network)
         self.gating_model.eval()
         self._current_gating_probs = None
         if hasattr(base_model, 'model') and hasattr(base_model.model, 'layers'):
@@ -179,15 +219,36 @@ class MoEModel(nn.Module):
         save_directory = Path(save_directory)
         save_directory.mkdir(parents=True, exist_ok=True)
         logger.info(f"Saving MoE model to: {save_directory}")
-        if hasattr(self.model, 'save_pretrained'):
-            self.model.save_pretrained(str(save_directory))
+        
+        if hasattr(self.model, 'layers'):
+            layers = self.model.layers
+        elif hasattr(self.model, 'h'):
+            layers = self.model.h
         else:
-            torch.save(self.model.state_dict(), str(save_directory / "model.pt"))
+            layers = []
+    
+        original_parent_refs = {}
+        try:
+            for layer in layers:
+                if hasattr(layer, 'mlp') and isinstance(layer.mlp, MoEFFN):
+                    original_parent_refs[id(layer.mlp)] = layer.mlp.parent_model
+                    object.__setattr__(layer.mlp, 'parent_model', None)
+            
+            if hasattr(self.model, 'save_pretrained'):
+                self.model.save_pretrained(str(save_directory))
+            else:
+                torch.save(self.model.state_dict(), str(save_directory / "model.pt"))
+        finally:
+            for layer in layers:
+                if hasattr(layer, 'mlp') and isinstance(layer.mlp, MoEFFN):
+                    if id(layer.mlp) in original_parent_refs:
+                        object.__setattr__(layer.mlp, 'parent_model', original_parent_refs[id(layer.mlp)])
+        
         self.tokenizer.save_pretrained(str(save_directory))
         self.gating_model.save_pretrained(str(save_directory / "gating"))
         config = {
             "model_type": "moe",
-            "num_experts": len(self.gating_model.num_classes) if hasattr(self.gating_model, 'num_classes') else len([m for m in self.model.layers[0].mlp.expert_mlps]) if hasattr(self.model, 'layers') else 0,
+            "num_experts": len(self.gating_model.gating_network.num_classes) if hasattr(self.gating_model, 'gating_network') and hasattr(self.gating_model.gating_network, 'num_classes') else len([m for m in self.model.layers[0].mlp.expert_mlps]) if hasattr(self.model, 'layers') else 0,
             "routing_mode": self.routing_mode,
         }
         with open(save_directory / "moe_config.json", "w") as f:

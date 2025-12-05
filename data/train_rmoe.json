@@ -5,6 +5,7 @@
         "truthfulqa",
         "longbench"
     ],
+    "datetime": "20251205_021041",
     "seed": 42,
     "expert_training": {
         "max_length": 512,

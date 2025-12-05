@@ -48,7 +48,14 @@ def main():
     if config.get("method") != "rmoe":
         logger.error("Config must specify method: 'rmoe'")
         sys.exit(1)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    if config.get("datetime"):
+        timestamp = config.get("datetime")
+        if len(timestamp) != 15 or not timestamp[8] == '_':
+            logger.warning(f"Datetime format may be incorrect. Expected: YYYYMMDD_HHMMSS (e.g., 20240115_021041), got: {timestamp}")
+        logger.info(f"Using datetime from config: {timestamp}")
+    else:
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        logger.info(f"Generated new timestamp: {timestamp}")
     work_dir = WORK_DIR / "workspace" / timestamp
     work_dir.mkdir(parents=True, exist_ok=True)
     log_file = work_dir / "train.log"
@@ -66,10 +73,22 @@ def main():
         logger.error("Config must specify base_model")
         sys.exit(1)
     try:
-        if not args.skip_experts:
-            datasets = config.get("datasets", ["truthfulqa", "longbench"])
-            expert_paths = []
-            expert_config = config.get("expert_training", {})
+        datasets = config.get("datasets", ["truthfulqa", "longbench"])
+        expert_paths = []
+        expert_config = config.get("expert_training", {})
+        
+        all_experts_exist = True
+        for dataset_name in datasets:
+            expert_output_dir = work_dir / "experts" / dataset_name
+            if not expert_output_dir.exists():
+                all_experts_exist = False
+                break
+            has_model = (expert_output_dir / "config.json").exists()
+            if not has_model:
+                all_experts_exist = False
+                break
+        
+        if not args.skip_experts and not all_experts_exist:
             for dataset_name in datasets:
                 logger.info(f"=" * 60)
                 logger.info(f"Training expert for dataset: {dataset_name}")
@@ -93,15 +112,22 @@ def main():
                 )
                 expert_paths.append(expert_output_dir)
         else:
-            logger.info("Skipping expert training")
-            expert_paths = [work_dir / "experts" / d for d in config.get("datasets", ["truthfulqa", "longbench"])]
-        if not args.skip_gating:
-            datasets = config.get("datasets", ["truthfulqa", "longbench"])
+            if all_experts_exist:
+                logger.info("All expert models already exist, skipping expert training")
+            else:
+                logger.info("Skipping expert training (--skip-experts flag)")
+            expert_paths = [work_dir / "experts" / d for d in datasets]
+        gating_output_dir = work_dir / "gating_network"
+        gating_exists = (
+            gating_output_dir.exists() and
+            (gating_output_dir / "gating_network.pt").exists()
+        )
+        
+        if not args.skip_gating and not gating_exists:
             logger.info(f"=" * 60)
             logger.info("Training gating network")
             logger.info(f"=" * 60)
             gating_config = config.get("gating", {})
-            gating_output_dir = work_dir / "gating_network"
             gating_output_dir = train_gating_network(
                 base_model=base_model_path,
                 datasets=datasets,
@@ -120,8 +146,11 @@ def main():
             )
             gating_path = gating_output_dir
         else:
-            logger.info("Skipping gating network training")
-            gating_path = work_dir / "gating_network"
+            if gating_exists:
+                logger.info("Gating network already exists, skipping gating network training")
+            else:
+                logger.info("Skipping gating network training (--skip-gating flag)")
+            gating_path = gating_output_dir
         if not args.skip_merge:
             logger.info(f"=" * 60)
             logger.info("Merging expert models into MoE")
@@ -132,13 +161,17 @@ def main():
                 expert_paths=expert_paths,
                 gating_model_path=gating_path,
                 output_dir=rmoe_output_dir,
-                base_model_path=config.get("base_model"),
+                base_model_path=base_model_path,
                 routing_mode=merge_config.get("routing_mode", "weighted_sum"),
             )
             rmoe_path = rmoe_output_dir
+            logger.info(f"MoE model (rmoe_model) created at: {rmoe_path}")
         else:
-            logger.info("Skipping model merging")
+            logger.info("Skipping model merging (--skip-merge flag)")
             rmoe_path = work_dir / "rmoe_model"
+            if not rmoe_path.exists():
+                logger.warning(f"rmoe_model directory does not exist at {rmoe_path}. Finetuning will fail if enabled.")
+        
         if not args.skip_finetune:
             finetune_config = config.get("full_finetune", {})
             if finetune_config.get("enabled", False):
@@ -151,7 +184,6 @@ def main():
                 use_cuda = torch.cuda.is_available()
                 device = torch.device("cuda" if use_cuda else "mps" if use_mps else "cpu")
                 
-                # Clear CUDA cache before loading model
                 if use_cuda:
                     torch.cuda.empty_cache()
                     logger.info(f"GPU memory before loading: {torch.cuda.memory_allocated() / 1024**3:.2f} GB / {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
@@ -160,7 +192,6 @@ def main():
                 for param in model.parameters():
                     param.requires_grad = True
                 
-                # Enable gradient checkpointing to reduce memory
                 if hasattr(model, "gradient_checkpointing_enable"):
                     model.gradient_checkpointing_enable()
                     logger.info("Gradient checkpointing enabled")
@@ -190,7 +221,7 @@ def main():
                     learning_rate=finetune_config.get("learning_rate", 5e-5),
                     weight_decay=finetune_config.get("weight_decay", 0.01),
                     logging_dir=str(output_dir / "logs"),
-                    logging_steps=1,  # Log every step to TensorBoard
+                    logging_steps=1,
                     eval_strategy="epoch",
                     save_strategy="epoch",
                     save_total_limit=2,
@@ -202,8 +233,8 @@ def main():
                     dataloader_num_workers=0 if use_mps else 2,
                     report_to=["tensorboard"],
                     seed=config.get("seed", 42),
-                    gradient_checkpointing=True,  # Reduce memory usage
-                    dataloader_pin_memory=False,  # Reduce memory usage
+                        gradient_checkpointing=True,
+                    dataloader_pin_memory=False,
                 )
                 data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
                 trainer = Trainer(
@@ -221,10 +252,12 @@ def main():
                 tokenizer.save_pretrained(str(output_dir))
                 final_model_path = output_dir
             else:
-                logger.info("Skipping full finetuning (enabled=False)")
+                logger.info("Skipping full finetuning (enabled=False in config)")
+                logger.info(f"Using merged MoE model (rmoe_model) as final model: {rmoe_path}")
                 final_model_path = rmoe_path
         else:
-            logger.info("Skipping full finetuning")
+            logger.info("Skipping full finetuning (--skip-finetune flag)")
+            logger.info(f"Using merged MoE model (rmoe_model) as final model: {rmoe_path}")
             final_model_path = rmoe_path
         if not args.skip_convert:
             logger.info(f"=" * 60)

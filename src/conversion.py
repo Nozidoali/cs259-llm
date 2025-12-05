@@ -31,29 +31,64 @@ def convert_to_gguf(model_path: Path, output_file: Path, quantize_level: str = "
 def merge_experts_to_standard_mlp(model_path: Path, output_path: Path, merge_mode: str = "average"):
     config = AutoConfig.from_pretrained(str(model_path), trust_remote_code=True)
     model = AutoModelForCausalLM.from_config(config, dtype=torch.float32).to("cpu")
-    index_file = model_path / "model.safetensors.index.json"
-    with open(index_file) as f:
-        weight_map = json.load(f)["weight_map"]
+    
     state_dict = {}
-    for safetensors_file in set(weight_map.values()):
-        with safe_open(str(model_path / safetensors_file), framework="pt", device="cpu") as f:
-            state_dict.update({key: f.get_tensor(key) for key in f.keys()})
+    index_file = model_path / "model.safetensors.index.json"
+
+    if index_file.exists():
+        logger.info("Loading from sharded safetensors format")
+        with open(index_file) as f:
+            weight_map = json.load(f)["weight_map"]
+        for safetensors_file in set(weight_map.values()):
+            with safe_open(str(model_path / safetensors_file), framework="pt", device="cpu") as f:
+                state_dict.update({key: f.get_tensor(key) for key in f.keys()})
+    elif (model_path / "model.safetensors").exists():
+        logger.info("Loading from single safetensors file")
+        with safe_open(str(model_path / "model.safetensors"), framework="pt", device="cpu") as f:
+            keys = f.keys()
+            state_dict.update({key: f.get_tensor(key) for key in keys})
+            logger.info(f"Loaded {len(keys)} tensors from model.safetensors")
+    elif (model_path / "pytorch_model.bin.index.json").exists():
+        logger.info("Loading from sharded pytorch format")
+        with open(model_path / "pytorch_model.bin.index.json") as f:
+            weight_map = json.load(f)["weight_map"]
+        for bin_file in set(weight_map.values()):
+            state_dict.update(torch.load(str(model_path / bin_file), map_location="cpu", weights_only=True))
+    elif (model_path / "pytorch_model.bin").exists():
+        logger.info("Loading from single pytorch file")
+        state_dict = torch.load(str(model_path / "pytorch_model.bin"), map_location="cpu", weights_only=True)
+    else:
+        raise FileNotFoundError(f"No model weights found in {model_path}. Expected one of: model.safetensors[.index.json], pytorch_model.bin[.index.json]")
+    
+    logger.info(f"Total state dict keys: {len(state_dict)}")
     expert_indices = set()
+    expert_keys = []
     for key in state_dict.keys():
-        if ".mlp.expert" in key and ".weight" in key:
-            parts = key.split(".mlp.expert")
-            if len(parts) > 1:
-                rest = parts[1].split("_mlp.")[0]
-                try:
-                    expert_idx = int(rest)
-                    expert_indices.add(expert_idx)
-                except ValueError:
-                    pass
+        if ".mlp.expert" in key:
+            expert_keys.append(key)
+            if ".weight" in key:
+                parts = key.split(".mlp.expert")
+                if len(parts) > 1:
+                    rest = parts[1].split("_mlp.")[0]
+                    try:
+                        expert_idx = int(rest)
+                        expert_indices.add(expert_idx)
+                    except ValueError:
+                        pass
+    
     num_experts = len(expert_indices) if expert_indices else 0
-    logger.info(f"Found {num_experts} experts in model")
+    logger.info(f"Found {num_experts} experts with indices: {sorted(expert_indices)}")
+    logger.info(f"Total expert keys: {len(expert_keys)}")
+    if expert_keys:
+        logger.info(f"Sample expert keys (first 5): {expert_keys[:5]}")
     new_state_dict = {k: v for k, v in state_dict.items() if ".mlp.expert" not in k}
+    logger.info(f"Base state dict (non-expert) keys: {len(new_state_dict)}")
+    
     if num_experts > 0:
+        logger.info(f"Merging {num_experts} experts using mode: {merge_mode}")
+        merged_layers = 0
         for layer_idx in range(config.num_hidden_layers):
+            layer_merged = False
             for proj_type in ["gate_proj", "up_proj", "down_proj"]:
                 standard_key = f"model.layers.{layer_idx}.mlp.{proj_type}.weight"
                 expert_weights = []
@@ -61,12 +96,22 @@ def merge_experts_to_standard_mlp(model_path: Path, output_path: Path, merge_mod
                     expert_key = f"model.layers.{layer_idx}.mlp.expert{expert_idx}_mlp.{proj_type}.weight"
                     if expert_key in state_dict:
                         expert_weights.append(state_dict[expert_key])
+                        if layer_idx == 0 and not layer_merged:
+                            logger.info(f"Layer {layer_idx}: Found expert {expert_idx} for {proj_type}, shape: {state_dict[expert_key].shape}")
                 if expert_weights:
                     if merge_mode == "average":
                         merged_weight = sum(expert_weights) / len(expert_weights)
                     else:
                         merged_weight = expert_weights[0].clone()
                     new_state_dict[standard_key] = merged_weight
+                    layer_merged = True
+                    if layer_idx == 0:
+                        logger.info(f"Layer {layer_idx}: Merged {len(expert_weights)} experts for {proj_type}, output shape: {merged_weight.shape}")
+            if layer_merged:
+                merged_layers += 1
+        logger.info(f"Successfully merged experts in {merged_layers}/{config.num_hidden_layers} layers")
+    else:
+        logger.warning("No experts found in model - skipping expert merging")
     model.load_state_dict(new_state_dict, strict=False)
     output_path.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(str(output_path))

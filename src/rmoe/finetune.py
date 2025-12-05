@@ -84,7 +84,7 @@ def train_expert(
         save_strategy="epoch",
         save_total_limit=2,
         load_best_model_at_end=True,
-        metric_for_best_model="eval_truthfulqa_bleurt_max_score" if dataset_name == "truthfulqa" else "eval_qmsum_rougeL",
+        metric_for_best_model="eval_truthfulqa_bleurt_max_score" if dataset_name == "truthfulqa" else "eval_longbench_rougeL",
         greater_is_better=True,
         fp16=use_cuda,
         bf16=use_mps,

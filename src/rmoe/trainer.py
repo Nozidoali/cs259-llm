@@ -142,7 +142,7 @@ class MultiDatasetEvalTrainer(Trainer):
                 try:
                     do_sample = self.temperature > 0.0
                     pad_token_id = tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else tokenizer.pad_token_id
-                    outputs = self.model.generate(**inputs, max_new_tokens=BLEURT_CONFIG["max_new_tokens"], temperature=self.temperature if do_sample else None, do_sample=do_sample, pad_token_id=pad_token_id, use_cache=False)
+                    outputs = self.model.generate(**inputs, max_new_tokens=BLEURT_CONFIG["max_new_tokens"], temperature=self.temperature if do_sample else None, do_sample=do_sample, pad_token_id=pad_token_id, use_cache=True)
                 except Exception as e:
                     logger.warning(f"Generation failed: {e}, skipping example")
                     continue
@@ -218,7 +218,7 @@ class MultiDatasetEvalTrainer(Trainer):
                 try:
                     do_sample = self.temperature > 0.0
                     pad_token_id = tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else tokenizer.pad_token_id
-                    outputs = self.model.generate(**inputs, max_new_tokens=self.qmsum_max_new_tokens, temperature=self.temperature if do_sample else None, do_sample=do_sample, pad_token_id=pad_token_id, use_cache=False)
+                    outputs = self.model.generate(**inputs, max_new_tokens=self.qmsum_max_new_tokens, temperature=self.temperature if do_sample else None, do_sample=do_sample, pad_token_id=pad_token_id, use_cache=True)
                 except Exception as e:
                     logger.warning(f"Generation failed: {e}, skipping example")
                     continue
