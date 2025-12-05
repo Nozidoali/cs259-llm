@@ -50,7 +50,7 @@ def train_expert(
     
     model = model.to(device)
     logger.info("Freezing all parameters except MLP layers...")
-    freeze_all_except_mlp(model)
+    mlp_params_count, output_head_params = freeze_all_except_mlp(model)
     
     # Enable gradient checkpointing to reduce memory
     if hasattr(model, "gradient_checkpointing_enable"):
@@ -106,6 +106,7 @@ def train_expert(
         model_type="causal",
         qmsum_max_new_tokens=qmsum_max_new_tokens,
         temperature=temperature,
+        output_head_params=output_head_params,  # Pass output head params to exclude from optimizer
     )
     logger.info("Starting training...")
     trainer.train()
