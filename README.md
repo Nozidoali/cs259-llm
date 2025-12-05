@@ -2,27 +2,30 @@
 
 ## Setup
 
-1. **Run the setup script to create a clean conda environment:**
+1. **Clone the repository with submodules:**
 ```bash
-bash setup.sh
+git clone --recurse-submodules https://github.com/Nozidoali/cs259-llm.git
+cd cs259-llm
 ```
 
-This will:
-- Remove any existing `snapdragon` environment
-- Create a fresh `snapdragon` environment with Python 3.9
-- Install PyTorch via conda (critical for macOS to avoid threading issues)
-- Install TensorFlow Metal for Apple Silicon GPU acceleration (speeds up BLEURT significantly)
-- Install BLEURT and all other dependencies
+If you already cloned without submodules, initialize them:
+```bash
+git submodule update --init --recursive
+```
 
-1. Configure environment variables:
+2. **Configure environment variables:**
 ```bash
 cp .env.example .env
 ```
 
 Edit `.env` and set:
-- `WORK_DIR`: Working directory for models, data, and logs (default: current directory)
+- `WORK_DIR`: Working directory for models, data, and logs (defaults to current directory)
+- `LLAMA_CPP_DIR`: Path to llama.cpp (defaults to `external/llama.cpp`)
 
-Note: GGUF conversion functionality is now included in the codebase and no longer requires an external llama.cpp installation.
+3. **Install dependencies:**
+```bash
+pip install -r requirements.txt
+```
 
 ## Usage
 

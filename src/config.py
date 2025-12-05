@@ -6,6 +6,8 @@ BASE_DIR = Path(__file__).parent.parent
 load_dotenv(dotenv_path=BASE_DIR / ".env")
 work_dir_env = os.getenv("WORK_DIR", "").strip()
 WORK_DIR = Path(work_dir_env) if work_dir_env else Path.cwd()
+llama_cpp_env = os.getenv("LLAMA_CPP_DIR", "").strip()
+LLAMA_CPP_DIR = Path(llama_cpp_env) if llama_cpp_env else BASE_DIR / "external" / "llama.cpp"
 
 if not WORK_DIR.exists() or not WORK_DIR.is_dir():
     raise ValueError(f"WORK_DIR does not exist or is not a directory: {WORK_DIR}")
