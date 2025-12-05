@@ -34,7 +34,6 @@ class MoEInference:
         model1_path: Optional[Union[str, Path]] = None,
         model2_path: Optional[Union[str, Path]] = None,
         gating_model_path: Optional[Union[str, Path]] = None,
-        base_model_path: Optional[Union[str, Path]] = None,
         routing_mode: str = "weighted_sum",
         device: Optional[torch.device] = None,
     ):
@@ -62,7 +61,6 @@ class MoEInference:
                 model1_path=model1_path,
                 model2_path=model2_path,
                 gating_model_path=gating_model_path,
-                base_model_path=base_model_path,
                 routing_mode=routing_mode,
                 device=device,
             )
@@ -142,8 +140,6 @@ def parse_args():
                        help="Path to second finetuned model (required if saved_model_path not provided)")
     parser.add_argument("--gating_model_path", type=str, default=None,
                        help="Path to gating network (required if saved_model_path not provided)")
-    parser.add_argument("--base_model_path", type=str, default=None,
-                       help="Path to base model for embeddings (optional)")
     parser.add_argument("--routing_mode", type=str, default="weighted_sum",
                        choices=["weighted_sum", "select_one"],
                        help="Routing mode: weighted_sum or select_one")
@@ -181,8 +177,6 @@ def load_config(args):
         config["model2_path"] = args.model2_path
     if args.gating_model_path:
         config["gating_model_path"] = args.gating_model_path
-    if args.base_model_path:
-        config["base_model_path"] = args.base_model_path
     if args.routing_mode:
         config["routing_mode"] = args.routing_mode
     
@@ -198,7 +192,6 @@ def main():
         model1_path=config.get("model1_path"),
         model2_path=config.get("model2_path"),
         gating_model_path=config.get("gating_model_path"),
-        base_model_path=config.get("base_model_path"),
         routing_mode=config.get("routing_mode", "weighted_sum"),
     )
     

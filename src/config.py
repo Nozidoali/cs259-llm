@@ -107,9 +107,7 @@ MOE_CONFIG = {
     "model1_path": None,
     "model2_path": None,
     "gating_model_path": None,
-    "base_model_path": None,
     "routing_mode": "weighted_sum",
-    "base_model": "meta-llama/Llama-3.2-1B-Instruct",
 }
 
 for dir_path in [MODELS_DIR, GGUF_OUTPUT_DIR, DATA_DIR, TRUTHFULQA_CACHE_DIR, LOGS_DIR, GATING_MODEL_DIR]:

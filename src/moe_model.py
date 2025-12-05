@@ -17,7 +17,6 @@ if sys_path not in sys.path:
 
 from model_utils import load_model_and_tokenizer
 from gating.gating_model import GatingNetwork
-from gating.gating_dataset import extract_embeddings, load_base_model_for_embeddings
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +68,6 @@ class MoEModel(nn.Module):
         model1_path: Union[str, Path],
         model2_path: Union[str, Path],
         gating_model_path: Union[str, Path],
-        base_model_path: Optional[Union[str, Path]] = None,
         routing_mode: Literal["weighted_sum", "select_one"] = "weighted_sum",
         device: Optional[torch.device] = None,
     ):
@@ -89,7 +87,6 @@ class MoEModel(nn.Module):
         self._model1_path = str(model1_path)
         self._model2_path = str(model2_path)
         self._gating_model_path = str(gating_model_path)
-        self._base_model_path = str(base_model_path) if base_model_path else None
         
         logger.info("Loading expert model 1...")
         self.model1, self.tokenizer1 = load_model_and_tokenizer(model_path=model1_path)
@@ -148,18 +145,9 @@ class MoEModel(nn.Module):
         self.gating_network = self.gating_network.to(model_dtype)
         self.gating_network.eval()
         
-        if base_model_path is None:
-            base_model_name = training_info.get("base_model", "meta-llama/Llama-3.2-1B-Instruct")
-            logger.info(f"Using base model from training info: {base_model_name}")
-            self.embedding_model, self.embedding_tokenizer, _ = load_base_model_for_embeddings(base_model_name)
-            self._embedding_model_name = base_model_name
-        else:
-            logger.info(f"Loading base model for embeddings from: {base_model_path}")
-            self.embedding_model, self.embedding_tokenizer = load_model_and_tokenizer(model_path=base_model_path)
-            self._embedding_model_name = None
-        
-        self.embedding_model = self.embedding_model.to(self.device)
-        self.embedding_model.eval()
+        logger.info("Using model1's embedding layer for gating")
+        self.embedding_model = self.model1
+        self.embedding_tokenizer = self.tokenizer1
         
         self._replace_ffn_layers()
         
@@ -202,19 +190,24 @@ class MoEModel(nn.Module):
         logger.info(f"Replaced {len(layers)} FFN layers with MoE FFN layers")
     
     def _get_gating_probs(self, input_ids, attention_mask):
-        batch_texts = self.tokenizer.batch_decode(input_ids, skip_special_tokens=True)
-        
-        embeddings = extract_embeddings(
-            self.embedding_model,
-            self.embedding_tokenizer,
-            batch_texts,
-            max_length=input_ids.shape[1],
-            batch_size=len(batch_texts),
-            device=self.device,
-        )
+        with torch.no_grad():
+            if hasattr(self.embedding_model, 'model') and hasattr(self.embedding_model.model, 'embed_tokens'):
+                embeddings = self.embedding_model.model.embed_tokens(input_ids)
+            elif hasattr(self.embedding_model, 'transformer') and hasattr(self.embedding_model.transformer, 'wte'):
+                embeddings = self.embedding_model.transformer.wte(input_ids)
+            else:
+                raise ValueError("Could not find embedding layer in model1")
+            
+            if attention_mask is not None:
+                mask_expanded = attention_mask.unsqueeze(-1).expand(embeddings.size()).to(embeddings.dtype)
+                sum_embeddings = torch.sum(embeddings * mask_expanded, dim=1)
+                sum_mask = torch.clamp(attention_mask.sum(dim=1, keepdim=True), min=1e-9).to(embeddings.dtype)
+                mean_embeddings = sum_embeddings / sum_mask
+            else:
+                mean_embeddings = embeddings.mean(dim=1)
         
         model_dtype = next(self.model1.parameters()).dtype
-        embedding_tensor = torch.tensor(embeddings, dtype=model_dtype).to(self.device)
+        embedding_tensor = mean_embeddings.to(model_dtype)
         
         with torch.no_grad():
             gating_probs = self.gating_network(embedding_tensor)
@@ -295,9 +288,7 @@ class MoEModel(nn.Module):
             "model1_path": str(getattr(self, '_model1_path', None)),
             "model2_path": str(getattr(self, '_model2_path', None)),
             "gating_model_path": str(getattr(self, '_gating_model_path', None)),
-            "base_model_path": str(getattr(self, '_base_model_path', None)),
             "routing_mode": self.routing_mode,
-            "embedding_model_name": getattr(self, '_embedding_model_name', None),
         }
         
         with open(save_directory / "moe_config.json", "w") as f:
@@ -344,7 +335,6 @@ class MoEModel(nn.Module):
                 model1_path=moe_config["model1_path"],
                 model2_path=moe_config["model2_path"],
                 gating_model_path=moe_config["gating_model_path"],
-                base_model_path=moe_config.get("base_model_path"),
                 routing_mode=routing_mode,
                 device=device,
             )
@@ -390,10 +380,9 @@ class MoEModel(nn.Module):
                 else:
                     raise FileNotFoundError(f"Gating model not found: {gating_model_path}")
                 
-                base_model_name = gating_training_info.get("base_model", "meta-llama/Llama-3.2-1B-Instruct")
-                instance.embedding_model, instance.embedding_tokenizer, _ = load_base_model_for_embeddings(base_model_name)
-                instance.embedding_model = instance.embedding_model.to(device)
-                instance.embedding_model.eval()
+                logger.info("Using model1's embedding layer for gating")
+                instance.embedding_model = instance.base_model
+                instance.embedding_tokenizer = instance.tokenizer
             else:
                 raise ValueError("Cannot load model without gating training info")
         
@@ -410,8 +399,6 @@ def main():
                        help="Path to second finetuned model")
     parser.add_argument("--gating_model_path", type=str, required=True,
                        help="Path to gating network")
-    parser.add_argument("--base_model_path", type=str, default=None,
-                       help="Path to base model for embeddings (optional)")
     parser.add_argument("--routing_mode", type=str, default="weighted_sum",
                        choices=["weighted_sum", "select_one"],
                        help="Routing mode: weighted_sum or select_one")
@@ -447,7 +434,6 @@ def main():
         model1_path=args.model1_path,
         model2_path=args.model2_path,
         gating_model_path=args.gating_model_path,
-        base_model_path=args.base_model_path,
         routing_mode=args.routing_mode,
         device=device,
     )

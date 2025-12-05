@@ -280,8 +280,6 @@ def parse_args():
                        help="Path to second finetuned model")
     parser.add_argument("--gating_model_path", type=str, default=None,
                        help="Path to gating network")
-    parser.add_argument("--base_model_path", type=str, default=None,
-                       help="Path to base model for embeddings")
     parser.add_argument("--routing_mode", type=str, default="weighted_sum",
                        choices=["weighted_sum", "select_one"],
                        help="Routing mode")
@@ -337,7 +335,6 @@ def main():
         model1_path=args.model1_path,
         model2_path=args.model2_path,
         gating_model_path=args.gating_model_path,
-        base_model_path=args.base_model_path,
         routing_mode=args.routing_mode,
         device=device,
     )
