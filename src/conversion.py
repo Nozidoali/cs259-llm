@@ -2575,7 +2575,7 @@ class ArceeModel(LlamaModel):
 
 @ModelBase.register("AfmoeForCausalLM")
 class AfmoeModel(LlamaModel):
-    model_arch = gguf.MODEL_ARCH.AFMOE
+    model_arch = getattr(gguf.MODEL_ARCH, 'AFMOE', gguf.MODEL_ARCH.LLAMA)
 
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
