@@ -1,15 +1,14 @@
 {
     "method": "rmoe",
-    "base_model": "qwen2-0.5b",
+    "base_model": "Llama-3.1-8B-Instruct",
     "datasets": [
         "truthfulqa",
         "longbench"
     ],
-    "datetime": "20251205_021041",
     "seed": 42,
     "expert_training": {
         "max_length": 512,
-        "num_epochs": 3,
+        "num_epochs": 10,
         "batch_size": 1,
         "gradient_accumulation_steps": 4,
         "learning_rate": 5e-5,
@@ -36,7 +35,7 @@
         "routing_mode": "weighted_sum"
     },
     "full_finetune": {
-        "enabled": false,
+        "enabled": true,
         "max_length": 512,
         "num_epochs": 3,
         "batch_size": 1,

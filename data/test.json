@@ -1,5 +1,5 @@
 {
-    "model": "moe-merged.gguf",
+    "model": "rmoe_model_q8_0.gguf",
     "device": "none",
     "threads": 4,
     "ctx_size": 32768,

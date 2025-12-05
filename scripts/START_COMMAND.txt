@@ -1,1 +1,71 @@
-bash -c "cd /workspace && ([ ! -d cs259-llm ] && git clone --recurse-submodules https://github.com/Nozidoali/cs259-llm.git cs259-llm || true) && cd /workspace/cs259-llm && git fetch origin && git checkout alice/rmoe && git reset --hard && git pull && git submodule update --init --recursive && python3 -m venv venv && source venv/bin/activate && pip install -q --upgrade pip && pip install -q -r requirements.txt && [ ! -f .env ] && [ -f .env.example ] && cp .env.example .env || true && export PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 TOKENIZERS_PARALLELISM=false PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True && echo \"Done\" && python train.py data/train_rmoe.json" 
+bash -c "
+set -e
+
+cd /workspace
+
+# Clone repo if missing
+if [ ! -d cs259-llm ]; then
+  git clone --recurse-submodules https://github.com/Nozidoali/cs259-llm.git cs259-llm
+fi
+
+cd /workspace/cs259-llm
+
+# Sync branch
+git fetch origin
+git checkout alice/rmoe
+git reset --hard origin/alice/rmoe
+git submodule update --init --recursive
+
+# Python venv + deps
+python3 -m venv venv
+source venv/bin/activate
+pip install -q --upgrade pip
+pip install -q -r requirements.txt
+
+# .env
+if [ ! -f .env ] && [ -f .env.example ]; then
+  cp .env.example .env
+fi
+
+# Runtime envs
+export WORK_DIR=/workspace/cs259-llm
+export LLAMA_CPP_DIR=/workspace/cs259-llm/external/llama.cpp
+export PYTHONUNBUFFERED=1
+export OMP_NUM_THREADS=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+echo 'Setup complete.'
+
+# Training
+python train.py data/train_rmoe.json
+echo 'Training completed.'
+
+###############################
+# SSH SERVER SETUP (FIXED)
+###############################
+
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server
+
+# Host keys
+mkdir -p /run/sshd
+ssh-keygen -A
+
+# Authorized keys
+mkdir -p /root/.ssh
+chmod 700 /root/.ssh
+
+cat << 'EOF' >> /root/.ssh/authorized_keys
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDS2SJ1+/WNYGEBcG/Li+1qarshBr2fOWmI3uZvkGfbH hanyu@Mac-Studio.lan
+EOF
+
+chmod 600 /root/.ssh/authorized_keys
+
+# Start SSH
+service ssh start
+echo 'SSH server ready.'
+
+# Keep container alive
+sleep infinity
+"
