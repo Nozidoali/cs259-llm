@@ -80,7 +80,7 @@ class DatasetEvalTrainer(Trainer):
             if not question or not correct_answers or not incorrect_answers:
                 continue
             
-            prompt = DATASET_CONFIG["format_template"].format(question=question).split("Answer:")[0] + "Answer:"
+            prompt = DATASET_CONFIG["format_template"].format(question=question, best_answer="").split("Answer:")[0] + "Answer:"
             inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
             inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
             

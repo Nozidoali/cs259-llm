@@ -48,7 +48,32 @@ def freeze_all_except_mlp(model):
     else:
         raise ValueError(f"Unsupported model architecture. Model type: {type(model).__name__}, attributes: {[attr for attr in dir(model) if not attr.startswith('_')]}")
     
+    # Unfreeze output head (lm_head) - required for loss computation
+    output_head_params_count = 0
+    if hasattr(model, 'lm_head'):
+        for param in model.lm_head.parameters():
+            param.requires_grad = True
+            output_head_params_count += 1
+    elif hasattr(model, 'output'):
+        for param in model.output.parameters():
+            param.requires_grad = True
+            output_head_params_count += 1
+    elif hasattr(model, 'embed_out'):
+        for param in model.embed_out.parameters():
+            param.requires_grad = True
+            output_head_params_count += 1
+    elif hasattr(model, 'model') and hasattr(model.model, 'lm_head'):
+        # Some models might have the output head nested under model.model
+        for param in model.model.lm_head.parameters():
+            param.requires_grad = True
+            output_head_params_count += 1
+    
     logger.info(f"Unfrozen {mlp_params_count} MLP parameters")
+    if output_head_params_count > 0:
+        logger.info(f"Unfrozen {output_head_params_count} output head parameters")
+    else:
+        logger.warning("No output head found to unfreeze. This may cause training issues.")
+    
     return mlp_params_count
 
 
@@ -70,7 +95,7 @@ def count_parameters(model):
     }
 
 
-def load_model_and_tokenizer(model_key_or_path=None, model_path=None, return_config_info=False):
+def load_model_and_tokenizer(model_key_or_path=None, model_path=None, return_config_info=False, dtype=None):
     from finetune import download_model
     
     if model_key_or_path is None and model_path is None:
@@ -104,16 +129,18 @@ def load_model_and_tokenizer(model_key_or_path=None, model_path=None, return_con
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
-    if model_type == "seq2seq":
-        if torch.cuda.is_available():
-            model = AutoModelForSeq2SeqLM.from_pretrained(model_id, dtype=torch.float16)
-        else:
-            model = AutoModelForSeq2SeqLM.from_pretrained(model_id, dtype=torch.float32)
+    # Determine dtype: use provided dtype, or default based on device (FP16 for CUDA, FP32 otherwise)
+    if dtype is not None:
+        model_dtype = dtype
+    elif torch.cuda.is_available():
+        model_dtype = torch.float16
     else:
-        if torch.cuda.is_available():
-            model = AutoModelForCausalLM.from_pretrained(model_id, dtype=torch.float16)
-        else:
-            model = AutoModelForCausalLM.from_pretrained(model_id, dtype=torch.float32)
+        model_dtype = torch.float32
+    
+    if model_type == "seq2seq":
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_id, dtype=model_dtype)
+    else:
+        model = AutoModelForCausalLM.from_pretrained(model_id, dtype=model_dtype)
     
     if hasattr(model, "gradient_checkpointing_enable"):
         model.gradient_checkpointing_enable()

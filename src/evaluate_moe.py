@@ -286,15 +286,15 @@ def parse_args():
     
     parser.add_argument("--truthfulqa_num_samples", type=int, default=None,
                        help="Number of TruthfulQA samples to evaluate (default: all)")
-    parser.add_argument("--truthfulqa_max_tokens", type=int, default=50,
-                       help="Maximum tokens for TruthfulQA generation")
+    parser.add_argument("--truthfulqa_max_new_tokens", type=int, default=50,
+                       help="Maximum number of new tokens to generate for TruthfulQA (default: 50)")
     
     parser.add_argument("--qmsum_prompt_dir", type=str, default=None,
                        help="Directory containing QMSum prompt files (default: WORK_DIR/prompt_files)")
     parser.add_argument("--qmsum_num_samples", type=int, default=None,
                        help="Number of QMSum samples to evaluate (default: all)")
-    parser.add_argument("--qmsum_max_tokens", type=int, default=200,
-                       help="Maximum tokens for QMSum generation")
+    parser.add_argument("--qmsum_max_new_tokens", type=int, default=200,
+                       help="Maximum number of new tokens to generate for QMSum (default: 200)")
     
     parser.add_argument("--random_seed", type=int, default=42,
                        help="Random seed for sampling")
@@ -351,7 +351,7 @@ def main():
         truthfulqa_results = evaluate_truthfulqa(
             inference=inference,
             num_samples=args.truthfulqa_num_samples,
-            max_new_tokens=args.truthfulqa_max_tokens,
+            max_new_tokens=args.truthfulqa_max_new_tokens,
             random_seed=args.random_seed,
         )
         results["truthfulqa"] = truthfulqa_results
@@ -366,7 +366,7 @@ def main():
             inference=inference,
             prompt_dir=args.qmsum_prompt_dir,
             num_samples=args.qmsum_num_samples,
-            max_new_tokens=args.qmsum_max_tokens,
+            max_new_tokens=args.qmsum_max_new_tokens,
             random_seed=args.random_seed,
         )
         results["qmsum"] = qmsum_results
