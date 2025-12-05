@@ -28,6 +28,16 @@ if [ ! -f .env ] && [ -f .env.example ]; then
   cp .env.example .env
 fi
 
+# Hugging Face login (using HF_TOKEN env variable from RunPod)
+if [ -n "$HF_TOKEN" ]; then
+  echo 'Logging into Hugging Face...'
+  huggingface-cli login --token "$HF_TOKEN" --add-to-git-credential
+  export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"
+  echo 'Hugging Face login complete.'
+else
+  echo 'Warning: HF_TOKEN not set. Hugging Face login skipped.'
+fi
+
 # Runtime envs
 export WORK_DIR=/workspace/cs259-llm
 export LLAMA_CPP_DIR=/workspace/cs259-llm/external/llama.cpp
