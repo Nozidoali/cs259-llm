@@ -5,7 +5,7 @@ from config import BLEURT_CONFIG, DATASET_CONFIG
 
 logger = logging.getLogger(__name__)
 
-def evaluate_truthfulqa(model, tokenizer, dataset, device=None):
+def evaluate_truthfulqa(model, tokenizer, dataset, device=None, temperature=0.0):
     if device is None:
         device = next(model.parameters()).device
     import evaluate
@@ -30,7 +30,8 @@ def evaluate_truthfulqa(model, tokenizer, dataset, device=None):
             inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
             inputs = {k: v.to(gen_device) for k, v in inputs.items()}
             with torch.no_grad():
-                outputs = model.generate(**inputs, max_new_tokens=BLEURT_CONFIG["max_new_tokens"], do_sample=False, pad_token_id=tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else tokenizer.pad_token_id)
+                do_sample = temperature > 0.0
+                outputs = model.generate(**inputs, max_new_tokens=BLEURT_CONFIG["max_new_tokens"], temperature=temperature if do_sample else None, do_sample=do_sample, pad_token_id=tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else tokenizer.pad_token_id)
             generated = tokenizer.decode(outputs[0], skip_special_tokens=True)
             if "Answer:" in generated:
                 pred = generated.split("Answer:")[-1].strip()
@@ -54,7 +55,7 @@ def evaluate_truthfulqa(model, tokenizer, dataset, device=None):
         if model_moved:
             model.to(device)
 
-def evaluate_qmsum(model, tokenizer, dataset, device=None, max_new_tokens=200):
+def evaluate_qmsum(model, tokenizer, dataset, device=None, max_new_tokens=200, temperature=0.0):
     if device is None:
         device = next(model.parameters()).device
     import evaluate
@@ -81,9 +82,20 @@ def evaluate_qmsum(model, tokenizer, dataset, device=None, max_new_tokens=200):
             inputs = {k: v.to(gen_device) for k, v in inputs.items()}
             input_ids_len = inputs['input_ids'].shape[1]
             with torch.no_grad():
-                outputs = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False, pad_token_id=tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else tokenizer.pad_token_id)
-            generated_ids = outputs[0][input_ids_len:]
-            pred = tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+                do_sample = temperature > 0.0   
+                outputs = model.generate(**inputs, max_new_tokens=max_new_tokens, temperature=temperature if do_sample else None, do_sample=do_sample, pad_token_id=tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else tokenizer.pad_token_id)
+            if hasattr(outputs, "sequences"):
+                full_sequences = outputs.sequences[0]
+            else:
+                full_sequences = outputs[0]
+            generated_ids = full_sequences[input_ids_len:]
+            response_token_level = tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+            full_text = tokenizer.decode(full_sequences, skip_special_tokens=True).strip()
+            input_text = tokenizer.decode(inputs['input_ids'][0], skip_special_tokens=True).strip()
+            if full_text.startswith(input_text):
+                pred = full_text[len(input_text):].strip()
+            else:
+                pred = response_token_level
             if pred and answer:
                 predictions.append(pred)
                 references.append(answer)
@@ -97,12 +109,12 @@ def evaluate_qmsum(model, tokenizer, dataset, device=None, max_new_tokens=200):
         if model_moved:
             model.to(device)
 
-def evaluate_all_datasets(model, tokenizer, datasets, device=None, qmsum_max_new_tokens=200):
+def evaluate_all_datasets(model, tokenizer, datasets, device=None, qmsum_max_new_tokens=200, temperature=0.0):
     results = {}
     for dataset_name, dataset in datasets.items():
         if dataset_name == "truthfulqa":
-            results[dataset_name] = evaluate_truthfulqa(model, tokenizer, dataset, device)
+            results[dataset_name] = evaluate_truthfulqa(model, tokenizer, dataset, device, temperature)
         elif dataset_name in ["longbench", "qmsum"]:
-            results[dataset_name] = evaluate_qmsum(model, tokenizer, dataset, device, qmsum_max_new_tokens)
+            results[dataset_name] = evaluate_qmsum(model, tokenizer, dataset, device, qmsum_max_new_tokens, temperature)
     return results
 

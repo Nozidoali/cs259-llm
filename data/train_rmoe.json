@@ -14,7 +14,8 @@
         "learning_rate": 5e-5,
         "weight_decay": 0.01,
         "eval_split": 0.2,
-        "qmsum_max_new_tokens": 200
+        "qmsum_max_new_tokens": 200,
+        "temperature": 0.5
     },
     "gating": {
         "hidden_dims": [

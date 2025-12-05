@@ -89,6 +89,7 @@ def main():
                     eval_split=expert_config.get("eval_split", 0.2),
                     seed=config.get("seed", 42),
                     qmsum_max_new_tokens=expert_config.get("qmsum_max_new_tokens", 200),
+                    temperature=expert_config.get("temperature", 0.0),
                 )
                 expert_paths.append(expert_output_dir)
         else:
@@ -149,9 +150,21 @@ def main():
                 use_mps = torch.backends.mps.is_available()
                 use_cuda = torch.cuda.is_available()
                 device = torch.device("cuda" if use_cuda else "mps" if use_mps else "cpu")
+                
+                # Clear CUDA cache before loading model
+                if use_cuda:
+                    torch.cuda.empty_cache()
+                    logger.info(f"GPU memory before loading: {torch.cuda.memory_allocated() / 1024**3:.2f} GB / {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+                
                 model = model.to(device)
                 for param in model.parameters():
                     param.requires_grad = True
+                
+                # Enable gradient checkpointing to reduce memory
+                if hasattr(model, "gradient_checkpointing_enable"):
+                    model.gradient_checkpointing_enable()
+                    logger.info("Gradient checkpointing enabled")
+                
                 model.train()
                 train_datasets = []
                 for dataset_name in datasets:
@@ -189,6 +202,8 @@ def main():
                     dataloader_num_workers=0 if use_mps else 2,
                     report_to=["tensorboard"],
                     seed=config.get("seed", 42),
+                    gradient_checkpointing=True,  # Reduce memory usage
+                    dataloader_pin_memory=False,  # Reduce memory usage
                 )
                 data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
                 trainer = Trainer(

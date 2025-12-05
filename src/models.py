@@ -6,7 +6,7 @@ from config import MODEL_CONFIGS, MODELS_DIR
 
 logger = logging.getLogger(__name__)
 
-def freeze_all_except_mlp(model):
+def freeze_all_except_mlp(model, exclude_output_head_from_optimizer=True):
     for param in model.parameters():
         param.requires_grad = False
     mlp_params_count = 0

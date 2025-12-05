@@ -7,13 +7,14 @@ from config import BLEURT_CONFIG, DATASET_CONFIG
 logger = logging.getLogger(__name__)
 
 class MultiDatasetEvalTrainer(Trainer):
-    def __init__(self, *args, eval_datasets=None, model_type="causal", qmsum_max_new_tokens=200, **kwargs):
+    def __init__(self, *args, eval_datasets=None, model_type="causal", qmsum_max_new_tokens=200, temperature=0.0, **kwargs):
         super().__init__(*args, **kwargs)
         self.eval_datasets = eval_datasets or {}
         self.model_type = model_type
         self.qmsum_max_new_tokens = qmsum_max_new_tokens
         self._bleurt = None
         self._rouge = None
+        self.temperature = temperature
     
     @property
     def bleurt(self):
@@ -69,7 +70,8 @@ class MultiDatasetEvalTrainer(Trainer):
             inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
             with torch.no_grad():
                 try:
-                    outputs = self.model.generate(**inputs, max_new_tokens=BLEURT_CONFIG["max_new_tokens"], do_sample=False, pad_token_id=self.tokenizer.eos_token_id if hasattr(self.tokenizer, "eos_token_id") else self.tokenizer.pad_token_id, use_cache=False)
+                    do_sample = self.temperature > 0.0
+                    outputs = self.model.generate(**inputs, max_new_tokens=BLEURT_CONFIG["max_new_tokens"], temperature=self.temperature if do_sample else None, do_sample=do_sample, pad_token_id=self.tokenizer.eos_token_id if hasattr(self.tokenizer, "eos_token_id") else self.tokenizer.pad_token_id, use_cache=False)
                 except Exception as e:
                     logger.warning(f"Generation failed: {e}, skipping example")
                     continue
@@ -109,17 +111,28 @@ class MultiDatasetEvalTrainer(Trainer):
                 continue
             prompt = f"{context}\n\n{input_text}" if context and input_text else (input_text or context)
             prompt = f"{prompt}\n\nSummary:"
-            inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
+            inputs = self.tokenizer(prompt, return_tensors="pt", truncation=False)
             inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
             input_ids_len = inputs['input_ids'].shape[1]
             with torch.no_grad():
                 try:
-                    outputs = self.model.generate(**inputs, max_new_tokens=self.qmsum_max_new_tokens, do_sample=False, pad_token_id=self.tokenizer.eos_token_id if hasattr(self.tokenizer, "eos_token_id") else self.tokenizer.pad_token_id, use_cache=False)
+                    do_sample = self.temperature > 0.0
+                    outputs = self.model.generate(**inputs, max_new_tokens=self.qmsum_max_new_tokens, temperature=self.temperature if do_sample else None, do_sample=do_sample, pad_token_id=self.tokenizer.eos_token_id if hasattr(self.tokenizer, "eos_token_id") else self.tokenizer.pad_token_id, use_cache=False)
                 except Exception as e:
                     logger.warning(f"Generation failed: {e}, skipping example")
                     continue
-            generated_ids = outputs[0][input_ids_len:]
-            pred = self.tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+            if hasattr(outputs, "sequences"):
+                full_sequences = outputs.sequences[0]
+            else:
+                full_sequences = outputs[0]
+            generated_ids = full_sequences[input_ids_len:]
+            response_token_level = self.tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+            full_text = self.tokenizer.decode(full_sequences, skip_special_tokens=True).strip()
+            input_text = self.tokenizer.decode(inputs['input_ids'][0], skip_special_tokens=True).strip()
+            if full_text.startswith(input_text):
+                pred = full_text[len(input_text):].strip()
+            else:
+                pred = response_token_level
             if pred and answer:
                 predictions.append(pred)
                 references.append(answer)
