@@ -25,6 +25,9 @@ protobuf
 scikit-learn
 safetensors>=0.3.0
 
+# GGUF conversion
+gguf>=0.1.0
+
 # TensorFlow and Keras (for BLEURT)
 tensorflow
 tf-keras

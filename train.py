@@ -50,8 +50,8 @@ def main():
         sys.exit(1)
     if config.get("datetime"):
         timestamp = config.get("datetime")
-        if len(timestamp) != 15 or not timestamp[8] == '_':
-            logger.warning(f"Datetime format may be incorrect. Expected: YYYYMMDD_HHMMSS (e.g., 20240115_021041), got: {timestamp}")
+        if len(timestamp) != 15 or timestamp[8] != '_':
+            logger.warning(f"Datetime format may be incorrect. Expected: YYYYMMDD_HHMMSS, got: {timestamp}")
         logger.info(f"Using datetime from config: {timestamp}")
     else:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -77,16 +77,7 @@ def main():
         expert_paths = []
         expert_config = config.get("expert_training", {})
         
-        all_experts_exist = True
-        for dataset_name in datasets:
-            expert_output_dir = work_dir / "experts" / dataset_name
-            if not expert_output_dir.exists():
-                all_experts_exist = False
-                break
-            has_model = (expert_output_dir / "config.json").exists()
-            if not has_model:
-                all_experts_exist = False
-                break
+        all_experts_exist = all((work_dir / "experts" / d).exists() and (work_dir / "experts" / d / "config.json").exists() for d in datasets)
         
         if not args.skip_experts and not all_experts_exist:
             for dataset_name in datasets:
@@ -118,10 +109,7 @@ def main():
                 logger.info("Skipping expert training (--skip-experts flag)")
             expert_paths = [work_dir / "experts" / d for d in datasets]
         gating_output_dir = work_dir / "gating_network"
-        gating_exists = (
-            gating_output_dir.exists() and
-            (gating_output_dir / "gating_network.pt").exists()
-        )
+        gating_exists = gating_output_dir.exists() and (gating_output_dir / "gating_network.pt").exists()
         
         if not args.skip_gating and not gating_exists:
             logger.info(f"=" * 60)
@@ -186,12 +174,10 @@ def main():
                 
                 if use_cuda:
                     torch.cuda.empty_cache()
-                    logger.info(f"GPU memory before loading: {torch.cuda.memory_allocated() / 1024**3:.2f} GB / {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
-                
+                    logger.info(f"GPU memory: {torch.cuda.memory_allocated() / 1024**3:.2f} GB / {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
                 model = model.to(device)
                 for param in model.parameters():
                     param.requires_grad = True
-                
                 if hasattr(model, "gradient_checkpointing_enable"):
                     model.gradient_checkpointing_enable()
                     logger.info("Gradient checkpointing enabled")
@@ -233,7 +219,7 @@ def main():
                     dataloader_num_workers=0 if use_mps else 2,
                     report_to=["tensorboard"],
                     seed=config.get("seed", 42),
-                        gradient_checkpointing=True,
+                    gradient_checkpointing=True,
                     dataloader_pin_memory=False,
                 )
                 data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
@@ -253,11 +239,9 @@ def main():
                 final_model_path = output_dir
             else:
                 logger.info("Skipping full finetuning (enabled=False in config)")
-                logger.info(f"Using merged MoE model (rmoe_model) as final model: {rmoe_path}")
                 final_model_path = rmoe_path
         else:
             logger.info("Skipping full finetuning (--skip-finetune flag)")
-            logger.info(f"Using merged MoE model (rmoe_model) as final model: {rmoe_path}")
             final_model_path = rmoe_path
         if not args.skip_convert:
             logger.info(f"=" * 60)

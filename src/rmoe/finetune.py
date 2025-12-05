@@ -43,7 +43,6 @@ def train_expert(
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "mps" if use_mps else "cpu")
     
-    # Clear CUDA cache before loading model
     if use_cuda:
         torch.cuda.empty_cache()
         logger.info(f"GPU memory before loading: {torch.cuda.memory_allocated() / 1024**3:.2f} GB / {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
@@ -52,7 +51,6 @@ def train_expert(
     logger.info("Freezing all parameters except MLP layers...")
     mlp_params_count, output_head_params = freeze_all_except_mlp(model)
     
-    # Enable gradient checkpointing to reduce memory
     if hasattr(model, "gradient_checkpointing_enable"):
         model.gradient_checkpointing_enable()
         logger.info("Gradient checkpointing enabled")
@@ -79,7 +77,7 @@ def train_expert(
         learning_rate=learning_rate,
         weight_decay=weight_decay,
         logging_dir=str(output_dir / "logs"),
-        logging_steps=1,  # Log every step to TensorBoard
+        logging_steps=1,
         eval_strategy="epoch",
         save_strategy="epoch",
         save_total_limit=2,
@@ -91,8 +89,8 @@ def train_expert(
         dataloader_num_workers=0 if use_mps else 2,
         report_to=["tensorboard"],
         seed=seed,
-        gradient_checkpointing=True,  # Reduce memory usage
-        dataloader_pin_memory=False,  # Reduce memory usage
+        gradient_checkpointing=True,
+        dataloader_pin_memory=False,
     )
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
     trainer = MultiDatasetEvalTrainer(
@@ -106,7 +104,7 @@ def train_expert(
         model_type="causal",
         qmsum_max_new_tokens=qmsum_max_new_tokens,
         temperature=temperature,
-        output_head_params=output_head_params,  # Pass output head params to exclude from optimizer
+        output_head_params=output_head_params,
     )
     logger.info("Starting training...")
     trainer.train()
@@ -118,4 +116,3 @@ def train_expert(
     final_results = evaluate_all_datasets(model, tokenizer, eval_datasets, device, qmsum_max_new_tokens, temperature)
     logger.info(f"Final evaluation results: {final_results}")
     return output_dir
-

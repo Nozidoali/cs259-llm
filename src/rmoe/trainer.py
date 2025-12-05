@@ -12,10 +12,8 @@ os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 os.environ['TF_GPU_ALLOCATOR'] = 'cuda_malloc_async'
 try:
     import tensorflow as tf
-    gpus = tf.config.experimental.list_physical_devices('GPU')
-    if gpus:
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
+    for gpu in tf.config.experimental.list_physical_devices('GPU'):
+        tf.config.experimental.set_memory_growth(gpu, True)
 except:
     pass
 
@@ -28,7 +26,6 @@ class MultiDatasetEvalTrainer(Trainer):
         self._bleurt = None
         self._rouge = None
         self.temperature = temperature
-        # Store output head params to exclude from optimizer
         self.output_head_params = set(output_head_params) if output_head_params else set()
     
     @property
@@ -52,39 +49,22 @@ class MultiDatasetEvalTrainer(Trainer):
         return self._rouge
     
     def create_optimizer(self):
-        """
-        Override to exclude output_head parameters from optimizer.
-        Output head is unfrozen for gradient flow but should not be updated.
-        """
         if self.optimizer is None:
-            # Filter output_head_params before creating optimizer
             if self.output_head_params:
-                # Get optimizer grouped parameters from parent, but filter before creating optimizer
-                decay_parameters = self.get_decay_parameter_names(self.model)
-                decay_parameters = [name for name in decay_parameters if "bias" not in name]
-                
+                decay_parameters = [n for n in self.get_decay_parameter_names(self.model) if "bias" not in n]
                 optimizer_grouped_parameters = [
                     {
-                        "params": [
-                            p for n, p in self.model.named_parameters() 
-                            if (n in decay_parameters and p.requires_grad and p not in self.output_head_params)
-                        ],
+                        "params": [p for n, p in self.model.named_parameters() if n in decay_parameters and p.requires_grad and p not in self.output_head_params],
                         "weight_decay": self.args.weight_decay,
                     },
                     {
-                        "params": [
-                            p for n, p in self.model.named_parameters() 
-                            if (n not in decay_parameters and p.requires_grad and p not in self.output_head_params)
-                        ],
+                        "params": [p for n, p in self.model.named_parameters() if n not in decay_parameters and p.requires_grad and p not in self.output_head_params],
                         "weight_decay": 0.0,
                     },
                 ]
-                
-                # Get optimizer class and kwargs
                 optimizer_cls, optimizer_kwargs = self.get_optimizer_cls_and_kwargs(self.args)
                 self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
             else:
-                # No output_head_params to filter, use parent implementation
                 super().create_optimizer()
         return self.optimizer
     
@@ -97,8 +77,7 @@ class MultiDatasetEvalTrainer(Trainer):
         self.model.eval()
         all_metrics = {}
         if eval_dataset is not None:
-            base_metrics = super().evaluate(eval_dataset, ignore_keys, metric_key_prefix)
-            all_metrics.update(base_metrics)
+            all_metrics.update(super().evaluate(eval_dataset, ignore_keys, metric_key_prefix))
             self._clear_memory()
         for dataset_name, dataset in self.eval_datasets.items():
             if dataset_name == "truthfulqa":

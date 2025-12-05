@@ -21,7 +21,8 @@ cp .env.example .env
 
 Edit `.env` and set:
 - `WORK_DIR`: Working directory for models, data, and logs (default: current directory)
-- `LLAMA_CPP_DIR`: Path to llama.cpp directory containing `convert_hf_to_gguf.py` (required for GGUF conversion)
+
+Note: GGUF conversion functionality is now included in the codebase and no longer requires an external llama.cpp installation.
 
 ## Usage
 
