@@ -14,6 +14,7 @@ cd /workspace/cs259-llm
 git fetch origin
 git checkout alice/rmoe
 git reset --hard origin/alice/rmoe
+git pull
 git submodule update --init --recursive
 
 # Python venv + deps

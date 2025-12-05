@@ -1,6 +1,6 @@
 {
     "method": "rmoe",
-    "base_model": "Llama-3.1-8B-Instruct",
+    "base_model": "meta-llama/Meta-Llama-3.2-1B-Instruct",
     "datasets": [
         "truthfulqa",
         "longbench"
