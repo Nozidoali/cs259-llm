@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-
-import os
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
 import torch
 import numpy as np
 import logging
@@ -12,12 +6,11 @@ from config import BLEURT_CONFIG, DATASET_CONFIG
 
 logger = logging.getLogger(__name__)
 
-class DatasetEvalTrainer(Trainer):
-    def __init__(self, *args, eval_dataset_with_answers=None, model_type="causal", dataset_type="truthfulqa", qmsum_max_new_tokens=200, **kwargs):
+class MultiDatasetEvalTrainer(Trainer):
+    def __init__(self, *args, eval_datasets=None, model_type="causal", qmsum_max_new_tokens=200, **kwargs):
         super().__init__(*args, **kwargs)
-        self.eval_dataset_with_answers = eval_dataset_with_answers
+        self.eval_datasets = eval_datasets or {}
         self.model_type = model_type
-        self.dataset_type = dataset_type
         self.qmsum_max_new_tokens = qmsum_max_new_tokens
         self._bleurt = None
         self._rouge = None
@@ -37,83 +30,66 @@ class DatasetEvalTrainer(Trainer):
         return self._rouge
     
     def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval"):
-        if eval_dataset is None:
-            eval_dataset = self.eval_dataset
-        
-        if self.eval_dataset_with_answers is None:
-            return super().evaluate(eval_dataset, ignore_keys, metric_key_prefix)
-        
+        was_training = self.model.training
+        gradient_checkpointing_enabled = False
+        if hasattr(self.model, "gradient_checkpointing") and self.model.gradient_checkpointing:
+            gradient_checkpointing_enabled = True
+            self.model.gradient_checkpointing_disable()
         self.model.eval()
-        
-        if self.dataset_type == "truthfulqa":
-            return self._evaluate_truthfulqa(eval_dataset, metric_key_prefix)
-        elif self.dataset_type == "qmsum":
-            return self._evaluate_qmsum(eval_dataset, metric_key_prefix)
-        elif self.dataset_type == "both":
-            return self._evaluate_both(eval_dataset, metric_key_prefix)
-        else:
-            return super().evaluate(eval_dataset, ignore_keys, metric_key_prefix)
-    
-    def _evaluate_both(self, eval_dataset, metric_key_prefix):
-        truthfulqa_examples = []
-        qmsum_examples = []
-        
-        for example in eval_dataset:
-            if "correct_answers" in example and example.get("correct_answers"):
-                truthfulqa_examples.append(example)
-            elif "answer" in example and example.get("answer"):
-                qmsum_examples.append(example)
-        
-        truthfulqa_metrics = self._evaluate_truthfulqa(truthfulqa_examples, metric_key_prefix) if truthfulqa_examples else {}
-        qmsum_metrics = self._evaluate_qmsum(qmsum_examples, metric_key_prefix) if qmsum_examples else {}
-        return {**truthfulqa_metrics, **qmsum_metrics}
+        all_metrics = {}
+        if eval_dataset is not None:
+            base_metrics = super().evaluate(eval_dataset, ignore_keys, metric_key_prefix)
+            all_metrics.update(base_metrics)
+        for dataset_name, dataset in self.eval_datasets.items():
+            if dataset_name == "truthfulqa":
+                metrics = self._evaluate_truthfulqa(dataset, f"{metric_key_prefix}_{dataset_name}")
+            elif dataset_name in ["longbench", "qmsum"]:
+                metrics = self._evaluate_qmsum(dataset, f"{metric_key_prefix}_{dataset_name}")
+            else:
+                continue
+            all_metrics.update(metrics)
+        if was_training:
+            self.model.train()
+            if gradient_checkpointing_enabled:
+                self.model.gradient_checkpointing_enable()
+        return all_metrics
     
     def _evaluate_truthfulqa(self, eval_dataset, metric_key_prefix):
+        self.model.eval()
         max_score_arr = []
         acc_score_arr = []
-        
-        for i, example in enumerate(eval_dataset):
+        for example in eval_dataset:
             question = example.get("question", "")
             correct_answers = example.get("correct_answers", [])
             incorrect_answers = example.get("incorrect_answers", [])
-            
             if not question or not correct_answers or not incorrect_answers:
                 continue
-            
             prompt = DATASET_CONFIG["format_template"].format(question=question, best_answer="").split("Answer:")[0] + "Answer:"
             inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
             inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
-            
             with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=BLEURT_CONFIG["max_new_tokens"],
-                    do_sample=False,
-                    pad_token_id=self.tokenizer.eos_token_id if hasattr(self.tokenizer, "eos_token_id") else self.tokenizer.pad_token_id,
-                )
-            
+                try:
+                    outputs = self.model.generate(**inputs, max_new_tokens=BLEURT_CONFIG["max_new_tokens"], do_sample=False, pad_token_id=self.tokenizer.eos_token_id if hasattr(self.tokenizer, "eos_token_id") else self.tokenizer.pad_token_id, use_cache=False)
+                except Exception as e:
+                    logger.warning(f"Generation failed: {e}, skipping example")
+                    continue
             generated = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
             if "Answer:" in generated:
                 pred = generated.split("Answer:")[-1].strip()
             else:
                 pred = generated[len(prompt):].strip()
-            
             if not pred:
                 continue
-            
             predictions_true = [pred] * len(correct_answers)
             predictions_false = [pred] * len(incorrect_answers)
             score_true = self.bleurt.compute(predictions=predictions_true, references=correct_answers)["scores"]
             score_false = self.bleurt.compute(predictions=predictions_false, references=incorrect_answers)["scores"]
             max_score = max(score_true) if score_true else 0.0
             acc_score = int(max(score_true) > max(score_false)) if score_true and score_false else 0
-            
             max_score_arr.append(max_score)
             acc_score_arr.append(acc_score)
-        
         avg_max_score = np.mean(max_score_arr) if max_score_arr else 0.0
         accuracy = np.mean(acc_score_arr) if acc_score_arr else 0.0
-        
         metrics = {
             f"{metric_key_prefix}_bleurt_max_score": avg_max_score,
             f"{metric_key_prefix}_bleurt_accuracy": accuracy
@@ -122,64 +98,38 @@ class DatasetEvalTrainer(Trainer):
         return metrics
     
     def _evaluate_qmsum(self, eval_dataset, metric_key_prefix):
+        self.model.eval()
         predictions = []
         references = []
-        
-        for i, example in enumerate(eval_dataset):
+        for example in eval_dataset:
             context = example.get("context", "")
             input_text = example.get("input", "")
             answer = example.get("answer", "")
-            
-            logger.info(f"[{self.dataset_type}] Example {i+1}: context_len={len(context)}, input_len={len(input_text)}, answer_len={len(answer)}")
-            
             if not answer:
-                logger.warning(f"[{self.dataset_type}] Example {i+1}: Skipping - no answer")
                 continue
-            
             prompt = f"{context}\n\n{input_text}" if context and input_text else (input_text or context)
             prompt = f"{prompt}\n\nSummary:"
             inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
             inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
-            
             input_ids_len = inputs['input_ids'].shape[1]
-            logger.info(f"[{self.dataset_type}] Example {i+1}: prompt_len={len(prompt)}, input_ids_len={input_ids_len}")
-            logger.info(f"[{self.dataset_type}] Example {i+1}: prompt_preview={prompt[:300]}...")
-            
             with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=self.qmsum_max_new_tokens,
-                    do_sample=False,
-                    pad_token_id=self.tokenizer.eos_token_id if hasattr(self.tokenizer, "eos_token_id") else self.tokenizer.pad_token_id,
-                )
-            
+                try:
+                    outputs = self.model.generate(**inputs, max_new_tokens=self.qmsum_max_new_tokens, do_sample=False, pad_token_id=self.tokenizer.eos_token_id if hasattr(self.tokenizer, "eos_token_id") else self.tokenizer.pad_token_id, use_cache=False)
+                except Exception as e:
+                    logger.warning(f"Generation failed: {e}, skipping example")
+                    continue
             generated_ids = outputs[0][input_ids_len:]
             pred = self.tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
-            
-            full_output = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            logger.info(f"[{self.dataset_type}] Example {i+1}: full_output_preview={full_output[:300]}...")
-            logger.info(f"[{self.dataset_type}] Example {i+1}: generated_tokens={len(generated_ids)}, pred_len={len(pred)}, pred={pred}")
-            
             if pred and answer:
                 predictions.append(pred)
                 references.append(answer)
-            else:
-                logger.warning(f"[{self.dataset_type}] Example {i+1}: Skipping - empty prediction or answer")
-        
         if not predictions:
-            metrics = {
-                f"{metric_key_prefix}_rougeL": 0.0
-            }
+            metrics = {f"{metric_key_prefix}_rougeL": 0.0}
             self.log(metrics)
             return metrics
-        
         result = self.rouge.compute(predictions=predictions, references=references, use_stemmer=True)
         rougeL = result.get("rougeL", 0.0)
-        
-        metrics = {
-            f"{metric_key_prefix}_rougeL": rougeL
-        }
+        metrics = {f"{metric_key_prefix}_rougeL": rougeL}
         self.log(metrics)
-        logger.info(f"[{self.dataset_type}] {metric_key_prefix}_rougeL: {rougeL:.6f}")
         return metrics
 
