@@ -16,12 +16,14 @@ hf_transfer
 evaluate>=0.4.0
 rouge_score
 nltk
+tensorboard>=2.13.0
 
 # Utilities
 python-dotenv>=1.0.0
 sentencepiece
 protobuf
 scikit-learn
+safetensors>=0.3.0
 
 # TensorFlow and Keras (for BLEURT)
 tensorflow

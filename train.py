@@ -187,7 +187,7 @@ def main():
                     fp16=use_cuda,
                     bf16=use_mps,
                     dataloader_num_workers=0 if use_mps else 2,
-                    report_to="none",
+                    report_to=["tensorboard"],
                     seed=config.get("seed", 42),
                 )
                 data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
