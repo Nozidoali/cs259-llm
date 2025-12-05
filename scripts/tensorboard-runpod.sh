@@ -22,13 +22,26 @@ WORKSPACE_DIR="$WORK_DIR/workspace"
 
 LOG_DIR=""
 
-# First, try to find the most recent timestamped workspace directory
+# Find the largest date string in the workspace folder (most recent timestamp)
+# Date format: YYYYMMDD_HHMMSS (e.g., 20251204_225232)
+# Since date strings are in YYYYMMDD_HHMMSS format, sorting them will naturally
+# put the largest (most recent) date first
 if [ -d "$WORKSPACE_DIR" ]; then
-    # Find the most recent timestamped directory (format: YYYYMMDD_HHMMSS)
-    LATEST_DIR=$(find "$WORKSPACE_DIR" -maxdepth 1 -type d \( -name "20*" \) 2>/dev/null | sort -r | head -1)
-    if [ -n "$LATEST_DIR" ] && [ -d "$LATEST_DIR" ]; then
-        LOG_DIR="$LATEST_DIR"
-        echo "Found most recent workspace: $LOG_DIR"
+    # Find all directories starting with "20" (year 2000+), sort in reverse to get largest date string
+    LATEST_DIR=$(find "$WORKSPACE_DIR" -maxdepth 1 -type d -name "20*" -printf "%f\n" 2>/dev/null | sort -r | head -1)
+    
+    # If printf is not available (macOS), use alternative method
+    if [ -z "$LATEST_DIR" ]; then
+        LATEST_DIR=$(find "$WORKSPACE_DIR" -maxdepth 1 -type d -name "20*" 2>/dev/null | xargs -n1 basename | sort -r | head -1)
+    fi
+    
+    if [ -n "$LATEST_DIR" ]; then
+        LOG_DIR="$WORKSPACE_DIR/$LATEST_DIR"
+        if [ -d "$LOG_DIR" ]; then
+            echo "Found workspace with largest date string: $LOG_DIR"
+        else
+            LOG_DIR=""
+        fi
     fi
 fi
 

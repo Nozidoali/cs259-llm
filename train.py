@@ -190,7 +190,7 @@ def main():
                     learning_rate=finetune_config.get("learning_rate", 5e-5),
                     weight_decay=finetune_config.get("weight_decay", 0.01),
                     logging_dir=str(output_dir / "logs"),
-                    logging_steps=10,
+                    logging_steps=1,  # Log every step to TensorBoard
                     eval_strategy="epoch",
                     save_strategy="epoch",
                     save_total_limit=2,

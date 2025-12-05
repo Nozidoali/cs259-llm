@@ -1,10 +1,23 @@
 import torch
 import numpy as np
 import logging
+import gc
+import os
 from transformers import Trainer
 from config import BLEURT_CONFIG, DATASET_CONFIG
 
 logger = logging.getLogger(__name__)
+
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+os.environ['TF_GPU_ALLOCATOR'] = 'cuda_malloc_async'
+try:
+    import tensorflow as tf
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+except:
+    pass
 
 class MultiDatasetEvalTrainer(Trainer):
     def __init__(self, *args, eval_datasets=None, model_type="causal", qmsum_max_new_tokens=200, temperature=0.0, **kwargs):
@@ -18,12 +31,8 @@ class MultiDatasetEvalTrainer(Trainer):
     
     @property
     def _get_tokenizer(self):
-        """Get tokenizer, using processing_class if available (for deprecation compatibility)."""
-        # Use processing_class if available (new API), fallback to tokenizer (old API)
         if hasattr(self, 'processing_class') and self.processing_class is not None:
             return self.processing_class
-        # Fallback to the old tokenizer attribute for backward compatibility
-        # Access via __dict__ to avoid triggering deprecation warning
         return getattr(self, 'tokenizer', None)
     
     @property
@@ -51,6 +60,7 @@ class MultiDatasetEvalTrainer(Trainer):
         if eval_dataset is not None:
             base_metrics = super().evaluate(eval_dataset, ignore_keys, metric_key_prefix)
             all_metrics.update(base_metrics)
+            self._clear_memory()
         for dataset_name, dataset in self.eval_datasets.items():
             if dataset_name == "truthfulqa":
                 metrics = self._evaluate_truthfulqa(dataset, f"{metric_key_prefix}_{dataset_name}")
@@ -59,11 +69,19 @@ class MultiDatasetEvalTrainer(Trainer):
             else:
                 continue
             all_metrics.update(metrics)
+            self._clear_memory()
+        self._clear_memory()
         if was_training:
             self.model.train()
             if gradient_checkpointing_enabled:
                 self.model.gradient_checkpointing_enable()
         return all_metrics
+    
+    def _clear_memory(self):
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
     
     def _evaluate_truthfulqa(self, eval_dataset, metric_key_prefix):
         self.model.eval()
@@ -72,7 +90,7 @@ class MultiDatasetEvalTrainer(Trainer):
         all_incorrect_refs = []
         tokenizer = self._get_tokenizer
         
-        for example in eval_dataset:
+        for idx, example in enumerate(eval_dataset):
             question = example.get("question", "")
             correct_answers = example.get("correct_answers", [])
             incorrect_answers = example.get("incorrect_answers", [])
@@ -95,7 +113,11 @@ class MultiDatasetEvalTrainer(Trainer):
                 all_predictions.append(pred)
                 all_correct_refs.append(correct_answers)
                 all_incorrect_refs.append(incorrect_answers)
+            del inputs, outputs, generated
+            if (idx + 1) % 10 == 0:
+                self._clear_memory()
         
+        self._clear_memory()
         if not all_predictions:
             metrics = {f"{metric_key_prefix}_bleurt_max_score": 0.0, f"{metric_key_prefix}_bleurt_accuracy": 0.0}
             self.log(metrics)
@@ -109,15 +131,12 @@ class MultiDatasetEvalTrainer(Trainer):
             batch_preds = all_predictions[i:i+batch_size]
             batch_correct = all_correct_refs[i:i+batch_size]
             batch_incorrect = all_incorrect_refs[i:i+batch_size]
-            
             expanded_preds_true = [p for p, refs in zip(batch_preds, batch_correct) for _ in refs]
             expanded_refs_true = [r for refs in batch_correct for r in refs]
             expanded_preds_false = [p for p, refs in zip(batch_preds, batch_incorrect) for _ in refs]
             expanded_refs_false = [r for refs in batch_incorrect for r in refs]
-            
             scores_true = self.bleurt.compute(predictions=expanded_preds_true, references=expanded_refs_true)["scores"] if expanded_preds_true else []
             scores_false = self.bleurt.compute(predictions=expanded_preds_false, references=expanded_refs_false)["scores"] if expanded_preds_false else []
-            
             true_idx = 0
             false_idx = 0
             for correct_refs, incorrect_refs in zip(batch_correct, batch_incorrect):
@@ -129,6 +148,8 @@ class MultiDatasetEvalTrainer(Trainer):
                 acc_score = int(max(example_scores_true) > max(example_scores_false)) if example_scores_true and example_scores_false else 0
                 max_score_arr.append(max_score)
                 acc_score_arr.append(acc_score)
+            del batch_preds, batch_correct, batch_incorrect, expanded_preds_true, expanded_refs_true, expanded_preds_false, expanded_refs_false, scores_true, scores_false
+            self._clear_memory()
         
         metrics = {
             f"{metric_key_prefix}_bleurt_max_score": np.mean(max_score_arr) if max_score_arr else 0.0,
@@ -143,7 +164,7 @@ class MultiDatasetEvalTrainer(Trainer):
         references = []
         tokenizer = self._get_tokenizer
         
-        for example in eval_dataset:
+        for idx, example in enumerate(eval_dataset):
             answer = example.get("answer", "")
             if not answer:
                 continue
@@ -170,7 +191,11 @@ class MultiDatasetEvalTrainer(Trainer):
             if pred and answer:
                 predictions.append(pred)
                 references.append(answer)
+            del inputs, outputs, full_sequences, generated_ids, full_text, input_decoded
+            if (idx + 1) % 10 == 0:
+                self._clear_memory()
         
+        self._clear_memory()
         if not predictions:
             metrics = {f"{metric_key_prefix}_rougeL": 0.0}
             self.log(metrics)
@@ -179,5 +204,6 @@ class MultiDatasetEvalTrainer(Trainer):
         result = self.rouge.compute(predictions=predictions, references=references, use_stemmer=True)
         metrics = {f"{metric_key_prefix}_rougeL": result.get("rougeL", 0.0)}
         self.log(metrics)
+        del result
+        self._clear_memory()
         return metrics
-

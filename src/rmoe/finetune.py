@@ -79,7 +79,7 @@ def train_expert(
         learning_rate=learning_rate,
         weight_decay=weight_decay,
         logging_dir=str(output_dir / "logs"),
-        logging_steps=10,
+        logging_steps=1,  # Log every step to TensorBoard
         eval_strategy="epoch",
         save_strategy="epoch",
         save_total_limit=2,
