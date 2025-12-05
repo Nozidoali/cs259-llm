@@ -30,7 +30,16 @@ if TYPE_CHECKING:
 # if 'NO_LOCAL_GGUF' not in os.environ:
 #     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
-from gguf.vocab import MistralTokenizerType, MistralVocab
+
+try:
+    from gguf.vocab import MistralTokenizerType, MistralVocab
+except (ImportError, AttributeError):
+    try:
+        MistralTokenizerType = getattr(gguf.vocab, 'MistralTokenizerType', None)
+        MistralVocab = getattr(gguf.vocab, 'MistralVocab', None)
+    except (AttributeError, ImportError):
+        MistralTokenizerType = None
+        MistralVocab = None
 
 try:
     from mistral_common.tokens.tokenizers.base import TokenizerVersion # pyright: ignore[reportMissingImports]
@@ -2299,6 +2308,8 @@ class LlamaModel(TextModel):
     def _set_vocab_mistral(self):
         if not _mistral_common_installed:
             raise ImportError(_mistral_import_error_msg)
+        if MistralVocab is None:
+            raise ImportError("MistralVocab is not available in this version of gguf")
 
         vocab = MistralVocab(self.dir_model)
         logger.info(
@@ -2320,7 +2331,7 @@ class LlamaModel(TextModel):
             f"token count ({len(tokens)}) != vocab size ({vocab.vocab_size})"
         )
 
-        if vocab.tokenizer_type == MistralTokenizerType.tekken:
+        if MistralTokenizerType is not None and vocab.tokenizer_type == MistralTokenizerType.tekken:
             self.gguf_writer.add_tokenizer_pre("tekken")
             self.gguf_writer.add_token_merges(
                 vocab.extract_vocab_merges_from_model()
@@ -9888,6 +9899,7 @@ class MistralModel(LlamaModel):
     @staticmethod
     def get_community_chat_template(vocab: MistralVocab, templates_dir: Path, is_mistral_format: bool):
         assert TokenizerVersion is not None and Tekkenizer is not None and SentencePieceTokenizer is not None, _mistral_import_error_msg
+        assert MistralTokenizerType is not None, "MistralTokenizerType is not available in this version of gguf"
         assert isinstance(vocab.tokenizer, (Tekkenizer, SentencePieceTokenizer)), (
             f"Expected Tekkenizer or SentencePieceTokenizer, got {type(vocab.tokenizer)}"
         )
