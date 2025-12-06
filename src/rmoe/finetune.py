@@ -29,6 +29,8 @@ def train_expert(
     gradient_accumulation_steps=4,
     learning_rate=5e-5,
     weight_decay=0.01,
+    l2_regularization=0.0,
+    max_grad_norm=1.0,
     eval_split=0.2,
     seed=42,
     qmsum_max_new_tokens=200,
@@ -67,6 +69,7 @@ def train_expert(
             eval_ds = eval_ds.train_test_split(test_size=0.1, seed=seed)
             eval_datasets[ds_name] = eval_ds["test"].select(range(min(50, len(eval_ds["test"]))))
     logger.info(f"Train samples: {len(train_dataset['train'])}, Eval samples: {len(train_dataset['test'])}")
+    logger.info(f"Training for {num_epochs} epochs with learning_rate={learning_rate}, l2_regularization={l2_regularization}, max_grad_norm={max_grad_norm}")
     training_args = TrainingArguments(
         output_dir=str(output_dir),
         overwrite_output_dir=True,
@@ -76,6 +79,7 @@ def train_expert(
         gradient_accumulation_steps=gradient_accumulation_steps,
         learning_rate=learning_rate,
         weight_decay=weight_decay,
+        max_grad_norm=max_grad_norm,  # Gradient clipping to prevent exploding gradients
         logging_dir=str(output_dir / "logs"),
         logging_steps=1,
         eval_strategy="epoch",
@@ -105,6 +109,7 @@ def train_expert(
         qmsum_max_new_tokens=qmsum_max_new_tokens,
         temperature=temperature,
         output_head_params=output_head_params,
+        l2_regularization=l2_regularization,
     )
     logger.info("Starting training...")
     trainer.train()

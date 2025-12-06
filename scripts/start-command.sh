@@ -91,15 +91,16 @@ echo 'Setup complete.'
 ###############################
 
 TENSORBOARD_PORT=6006
-# TensorBoard logs are stored at: $WORK_DIR/workspace/$WORKSPACE_TIMESTAMP/logs/
-TENSORBOARD_LOG_DIR=\$WORK_DIR/workspace/\$WORKSPACE_TIMESTAMP/logs
+# TensorBoard logs are stored at: $WORK_DIR/workspace/$WORKSPACE_TIMESTAMP/experts/{dataset}/logs/
+# Monitor the workspace directory so it can find logs in all expert subdirectories
+TENSORBOARD_LOG_DIR=\$WORK_DIR/workspace/\$WORKSPACE_TIMESTAMP
 
 # Create workspace directory if it doesn't exist
 mkdir -p \"\$TENSORBOARD_LOG_DIR\"
 
 echo 'Starting TensorBoard in background...'
 echo \"Workspace timestamp: \$WORKSPACE_TIMESTAMP\"
-echo \"TensorBoard will monitor: \$TENSORBOARD_LOG_DIR\"
+echo \"TensorBoard will monitor: \$TENSORBOARD_LOG_DIR (will find logs in experts/*/logs/ subdirectories)\"
 echo \"TensorBoard will be available at: http://localhost:\$TENSORBOARD_PORT\"
 
 # Start TensorBoard in background

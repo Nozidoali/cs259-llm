@@ -18,7 +18,7 @@ except:
     pass
 
 class MultiDatasetEvalTrainer(Trainer):
-    def __init__(self, *args, eval_datasets=None, model_type="causal", qmsum_max_new_tokens=200, temperature=0.0, output_head_params=None, **kwargs):
+    def __init__(self, *args, eval_datasets=None, model_type="causal", qmsum_max_new_tokens=200, temperature=0.0, output_head_params=None, l2_regularization=0.0, **kwargs):
         super().__init__(*args, **kwargs)
         self.eval_datasets = eval_datasets or {}
         self.model_type = model_type
@@ -27,6 +27,7 @@ class MultiDatasetEvalTrainer(Trainer):
         self._rouge = None
         self.temperature = temperature
         self.output_head_params = set(output_head_params) if output_head_params else set()
+        self.l2_regularization = l2_regularization
     
     @property
     def _get_tokenizer(self):
@@ -100,6 +101,24 @@ class MultiDatasetEvalTrainer(Trainer):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
+    
+    def compute_loss(self, model, inputs, return_outputs=False):
+        """
+        Override compute_loss to add L2 regularization term to the loss.
+        This helps prevent overfitting during long training (100 epochs).
+        """
+        # Get standard loss from parent class
+        loss, outputs = super().compute_loss(model, inputs, return_outputs=True)
+        
+        # Add L2 regularization on trainable parameters
+        if self.l2_regularization > 0 and self.training:
+            l2_reg = torch.tensor(0.0, device=loss.device, dtype=loss.dtype)
+            for name, param in model.named_parameters():
+                if param.requires_grad:
+                    l2_reg = l2_reg + torch.sum(param ** 2)
+            loss = loss + self.l2_regularization * l2_reg
+        
+        return (loss, outputs) if return_outputs else loss
     
     def _evaluate_truthfulqa(self, eval_dataset, metric_key_prefix):
         self.model.eval()

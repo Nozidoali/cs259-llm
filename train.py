@@ -97,6 +97,8 @@ def main():
                     gradient_accumulation_steps=expert_config.get("gradient_accumulation_steps", 4),
                     learning_rate=expert_config.get("learning_rate", 5e-5),
                     weight_decay=expert_config.get("weight_decay", 0.01),
+                    l2_regularization=expert_config.get("l2_regularization", 0.0),
+                    max_grad_norm=expert_config.get("max_grad_norm", 1.0),
                     eval_split=expert_config.get("eval_split", 0.2),
                     seed=config.get("seed", 42),
                     qmsum_max_new_tokens=expert_config.get("qmsum_max_new_tokens", 200),
