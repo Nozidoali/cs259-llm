@@ -102,13 +102,17 @@ class MultiDatasetEvalTrainer(Trainer):
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
     
-    def compute_loss(self, model, inputs, return_outputs=False):
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         """
         Override compute_loss to add L2 regularization term to the loss.
         This helps prevent overfitting during long training (100 epochs).
         """
         # Get standard loss from parent class
-        loss, outputs = super().compute_loss(model, inputs, return_outputs=True)
+        # Pass num_items_in_batch if provided (newer transformers versions)
+        if num_items_in_batch is not None:
+            loss, outputs = super().compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
+        else:
+            loss, outputs = super().compute_loss(model, inputs, return_outputs=True)
         
         # Add L2 regularization on trainable parameters
         if self.l2_regularization > 0 and self.training:
@@ -126,6 +130,9 @@ class MultiDatasetEvalTrainer(Trainer):
         all_correct_refs = []
         all_incorrect_refs = []
         tokenizer = self._get_tokenizer
+        
+        # Store examples for readable logging
+        example_logs = []
         
         for idx, example in enumerate(eval_dataset):
             question = example.get("question", "")
@@ -150,6 +157,14 @@ class MultiDatasetEvalTrainer(Trainer):
                 all_predictions.append(pred)
                 all_correct_refs.append(correct_answers)
                 all_incorrect_refs.append(incorrect_answers)
+                # Store for logging (sample first 3 examples)
+                if len(example_logs) < 3:
+                    example_logs.append({
+                        "question": question,
+                        "prediction": pred,
+                        "correct_answers": correct_answers[:2],  # Show first 2 correct answers
+                        "incorrect_answers": incorrect_answers[:2]  # Show first 2 incorrect answers
+                    })
             del inputs, outputs, generated
             if (idx + 1) % 10 == 0:
                 self._clear_memory()
@@ -192,6 +207,20 @@ class MultiDatasetEvalTrainer(Trainer):
             f"{metric_key_prefix}_bleurt_max_score": np.mean(max_score_arr) if max_score_arr else 0.0,
             f"{metric_key_prefix}_bleurt_accuracy": np.mean(acc_score_arr) if acc_score_arr else 0.0
         }
+        
+        # Log example questions and answers in a readable format
+        if example_logs:
+            logger.info("=" * 80)
+            logger.info(f"TruthfulQA Evaluation Examples ({metric_key_prefix}):")
+            logger.info("=" * 80)
+            for i, ex in enumerate(example_logs, 1):
+                logger.info(f"\nExample {i}:")
+                logger.info(f"  Question: {ex['question']}")
+                logger.info(f"  Prediction: {ex['prediction']}")
+                logger.info(f"  Correct Answers: {', '.join(ex['correct_answers'])}")
+                logger.info(f"  Incorrect Answers: {', '.join(ex['incorrect_answers'])}")
+            logger.info("=" * 80)
+        
         self.log(metrics)
         return metrics
     
@@ -200,6 +229,9 @@ class MultiDatasetEvalTrainer(Trainer):
         predictions = []
         references = []
         tokenizer = self._get_tokenizer
+        
+        # Store examples for readable logging
+        example_logs = []
         
         for idx, example in enumerate(eval_dataset):
             answer = example.get("answer", "")
@@ -228,6 +260,17 @@ class MultiDatasetEvalTrainer(Trainer):
             if pred and answer:
                 predictions.append(pred)
                 references.append(answer)
+                # Store for logging (sample first 3 examples)
+                if len(example_logs) < 3:
+                    # Truncate context/input for readability
+                    display_context = context[:200] + "..." if len(context) > 200 else context
+                    display_input = input_text[:200] + "..." if len(input_text) > 200 else input_text
+                    example_logs.append({
+                        "context": display_context,
+                        "input": display_input,
+                        "prediction": pred[:300] + "..." if len(pred) > 300 else pred,
+                        "reference": answer[:300] + "..." if len(answer) > 300 else answer
+                    })
             del inputs, outputs, full_sequences, generated_ids, full_text, input_decoded
             if (idx + 1) % 10 == 0:
                 self._clear_memory()
@@ -240,6 +283,22 @@ class MultiDatasetEvalTrainer(Trainer):
         
         result = self.rouge.compute(predictions=predictions, references=references, use_stemmer=True)
         metrics = {f"{metric_key_prefix}_rougeL": result.get("rougeL", 0.0)}
+        
+        # Log example questions and answers in a readable format
+        if example_logs:
+            logger.info("=" * 80)
+            logger.info(f"QMSum/LongBench Evaluation Examples ({metric_key_prefix}):")
+            logger.info("=" * 80)
+            for i, ex in enumerate(example_logs, 1):
+                logger.info(f"\nExample {i}:")
+                if ex.get("context"):
+                    logger.info(f"  Context: {ex['context']}")
+                if ex.get("input"):
+                    logger.info(f"  Input: {ex['input']}")
+                logger.info(f"  Prediction: {ex['prediction']}")
+                logger.info(f"  Reference: {ex['reference']}")
+            logger.info("=" * 80)
+        
         self.log(metrics)
         del result
         self._clear_memory()
