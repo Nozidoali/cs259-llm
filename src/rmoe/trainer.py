@@ -1,12 +1,40 @@
 import torch
+import torch.nn.functional as F
 import numpy as np
 import logging
 import gc
 import os
+from dataclasses import dataclass
 from transformers import Trainer
+from transformers.data.data_collator import DataCollatorForLanguageModeling
 from config import BLEURT_CONFIG, DATASET_CONFIG
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TruthfulQADataCollator(DataCollatorForLanguageModeling):
+    """Custom data collator that preserves TruthfulQA metadata for custom loss computation."""
+    
+    def __call__(self, features):
+        # Extract metadata before standard collation
+        metadata_keys = ["correct_answers", "incorrect_answers", "question"]
+        metadata = []
+        
+        for feature in features:
+            meta = {}
+            for key in metadata_keys:
+                if key in feature:
+                    meta[key] = feature.pop(key)
+            metadata.append(meta if meta else None)
+        
+        # Standard collation for input_ids, attention_mask, labels
+        batch = super().__call__(features)
+        
+        # Add metadata back to batch
+        batch["truthfulqa_metadata"] = metadata
+        
+        return batch
 
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 os.environ['TF_GPU_ALLOCATOR'] = 'cuda_malloc_async'
@@ -86,15 +114,28 @@ class MultiDatasetEvalTrainer(Trainer):
     
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         """
-        Override compute_loss to add L2 regularization term to the loss.
-        This helps prevent overfitting during long training (100 epochs).
+        Override compute_loss to add:
+        - L2 regularization
+        - Custom TruthfulQA loss components (contrastive + length penalty)
         """
+        # Extract TruthfulQA metadata if present
+        truthfulqa_metadata = inputs.pop("truthfulqa_metadata", None)
+        
         # Get standard loss from parent class
         # Pass num_items_in_batch if provided (newer transformers versions)
         if num_items_in_batch is not None:
             loss, outputs = super().compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
         else:
             loss, outputs = super().compute_loss(model, inputs, return_outputs=True)
+        
+        # Add custom TruthfulQA loss components during training
+        if model.training and truthfulqa_metadata is not None and any(m is not None for m in truthfulqa_metadata):
+            truthfulqa_loss = self._compute_truthfulqa_custom_loss(
+                model, inputs, outputs, truthfulqa_metadata
+            )
+            if truthfulqa_loss is not None:
+                # Add the custom loss components
+                loss = loss + truthfulqa_loss
         
         # Add L2 regularization on trainable parameters
         # Check if model is in training mode (not eval mode)
@@ -106,6 +147,119 @@ class MultiDatasetEvalTrainer(Trainer):
             loss = loss + self.l2_regularization * l2_reg
         
         return (loss, outputs) if return_outputs else loss
+    
+    def _compute_truthfulqa_custom_loss(self, model, inputs, outputs, metadata):
+        """
+        Compute custom loss components for TruthfulQA:
+        1. Contrastive loss: encourage similarity to correct answers, dissimilarity to incorrect
+        2. Length penalty: encourage shorter responses
+        """
+        try:
+            tokenizer = self._get_tokenizer
+            device = outputs.logits.device
+            
+            # Get the generated token probabilities from logits
+            logits = outputs.logits  # Shape: (batch_size, seq_len, vocab_size)
+            
+            total_contrastive_loss = 0.0
+            total_length_penalty = 0.0
+            valid_samples = 0
+            
+            for idx, meta in enumerate(metadata):
+                if meta is None or not meta.get("correct_answers") or not meta.get("incorrect_answers"):
+                    continue
+                
+                correct_answers = meta["correct_answers"]
+                incorrect_answers = meta["incorrect_answers"]
+                
+                # Sample 2 correct and 2 incorrect answers for efficiency
+                import random
+                correct_sample = random.sample(correct_answers, min(2, len(correct_answers)))
+                incorrect_sample = random.sample(incorrect_answers, min(2, len(incorrect_answers)))
+                
+                # Tokenize answers (without special tokens, just the text)
+                correct_tokens = [
+                    tokenizer.encode(ans, add_special_tokens=False, truncation=True, max_length=20)
+                    for ans in correct_sample
+                ]
+                incorrect_tokens = [
+                    tokenizer.encode(ans, add_special_tokens=False, truncation=True, max_length=20)
+                    for ans in incorrect_sample
+                ]
+                
+                # Get the logits for this sample
+                sample_logits = logits[idx]  # Shape: (seq_len, vocab_size)
+                
+                # Compute average log probability for correct answer tokens
+                correct_log_probs = []
+                for tokens in correct_tokens:
+                    if len(tokens) > 0:
+                        token_tensor = torch.tensor(tokens, device=device)
+                        # Get probability of these tokens across the sequence
+                        probs = F.softmax(sample_logits, dim=-1)
+                        # Average probability of correct answer tokens appearing
+                        token_probs = probs[:, token_tensor].max(dim=0).values
+                        correct_log_probs.append(torch.log(token_probs.mean() + 1e-10))
+                
+                # Compute average log probability for incorrect answer tokens
+                incorrect_log_probs = []
+                for tokens in incorrect_tokens:
+                    if len(tokens) > 0:
+                        token_tensor = torch.tensor(tokens, device=device)
+                        probs = F.softmax(sample_logits, dim=-1)
+                        token_probs = probs[:, token_tensor].max(dim=0).values
+                        incorrect_log_probs.append(torch.log(token_probs.mean() + 1e-10))
+                
+                # Contrastive loss: maximize correct prob, minimize incorrect prob
+                if correct_log_probs and incorrect_log_probs:
+                    correct_score = torch.stack(correct_log_probs).mean()
+                    incorrect_score = torch.stack(incorrect_log_probs).mean()
+                    # We want correct > incorrect, so loss = -(correct - incorrect)
+                    # Add margin for clearer separation
+                    margin = 0.5
+                    contrastive = -torch.clamp(correct_score - incorrect_score - margin, min=-10.0)
+                    total_contrastive_loss += contrastive
+                
+                # Length penalty: penalize longer sequences
+                # Count non-padding tokens in the labels
+                labels = inputs["labels"][idx]
+                non_pad_mask = labels != -100
+                response_length = non_pad_mask.sum().float()
+                # Penalty increases with length (target around 10-20 tokens)
+                target_length = 15.0
+                length_penalty = F.relu(response_length - target_length) / 100.0
+                total_length_penalty += length_penalty
+                
+                valid_samples += 1
+            
+            if valid_samples == 0:
+                return None
+            
+            # Average over valid samples and weight the components
+            contrastive_weight = 0.1  # Weight for contrastive loss
+            length_weight = 0.05       # Weight for length penalty
+            
+            avg_contrastive = total_contrastive_loss / valid_samples
+            avg_length = total_length_penalty / valid_samples
+            
+            total_custom_loss = contrastive_weight * avg_contrastive + length_weight * avg_length
+            
+            # Log components periodically
+            if self.state.global_step % 20 == 0:
+                logger.info(
+                    f"TruthfulQA custom loss components - "
+                    f"Contrastive: {avg_contrastive.item():.4f}, "
+                    f"Length penalty: {avg_length.item():.4f}, "
+                    f"Total custom: {total_custom_loss.item():.4f}"
+                )
+            
+            return total_custom_loss
+            
+        except Exception as e:
+            logger.warning(f"Error computing TruthfulQA custom loss: {e}")
+            import traceback
+            logger.warning(traceback.format_exc())
+            return None
     
     def _evaluate_truthfulqa(self, eval_dataset, metric_key_prefix):
         self.model.eval()

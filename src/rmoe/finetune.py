@@ -2,10 +2,10 @@ import os
 import torch
 import logging
 from pathlib import Path
-from transformers import TrainingArguments, DataCollatorForLanguageModeling, EarlyStoppingCallback
+from transformers import TrainingArguments, EarlyStoppingCallback
 from models import load_model_and_tokenizer, freeze_all_except_mlp
 from data import prepare_truthfulqa_dataset, prepare_qmsum_dataset
-from rmoe.trainer import MultiDatasetEvalTrainer
+from rmoe.trainer import MultiDatasetEvalTrainer, TruthfulQADataCollator
 from rmoe.evaluate import evaluate_all_datasets
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,12 @@ def train_expert(
     model.train()
     full_dataset = prepare_dataset(dataset_name, tokenizer, max_length, keep_metadata=True)
     
+    # Limit qmsum to first 50 samples
+    if dataset_name == "longbench":
+        num_samples = min(50, len(full_dataset))
+        full_dataset = full_dataset.select(range(num_samples))
+        logger.info(f"Limited qmsum dataset to first {num_samples} samples")
+    
     # Option to disable eval split for overfitting experts on full dataset
     if disable_eval_split:
         logger.info(f"Eval split disabled - training on full dataset to overfit expert")
@@ -76,8 +82,13 @@ def train_expert(
                 eval_datasets[ds_name] = train_dataset["test"]
             else:
                 eval_ds = prepare_dataset(ds_name, tokenizer, max_length, keep_metadata=True)
-                eval_ds = eval_ds.train_test_split(test_size=0.1, seed=seed)
-                eval_datasets[ds_name] = eval_ds["test"].select(range(min(50, len(eval_ds["test"]))))
+                # Limit other datasets to first 50 samples for eval
+                if ds_name == "longbench":
+                    num_eval_samples = min(50, len(eval_ds))
+                    eval_datasets[ds_name] = eval_ds.select(range(num_eval_samples))
+                else:
+                    eval_ds = eval_ds.train_test_split(test_size=0.1, seed=seed)
+                    eval_datasets[ds_name] = eval_ds["test"].select(range(min(50, len(eval_ds["test"]))))
         logger.info(f"Train samples: {len(train_dataset['train'])}, Eval samples: {len(train_dataset['test'])}")
     logger.info(f"Training for {num_epochs} epochs with learning_rate={learning_rate}, l2_regularization={l2_regularization}, max_grad_norm={max_grad_norm}")
     logger.info(f"Eval split {'disabled (overfitting mode - evaluating on training set)' if disable_eval_split else f'enabled ({eval_split*100}% held out)'}")
@@ -114,7 +125,14 @@ def train_expert(
         gradient_checkpointing=False,  # Disabled: incompatible with frozen parameters
         dataloader_pin_memory=False,
     )
-    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+    
+    # Use custom data collator for TruthfulQA to preserve metadata
+    if dataset_name == "truthfulqa":
+        data_collator = TruthfulQADataCollator(tokenizer=tokenizer, mlm=False)
+        logger.info("Using TruthfulQADataCollator with custom loss components")
+    else:
+        from transformers import DataCollatorForLanguageModeling
+        data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
     
     early_stopping_callback = EarlyStoppingCallback(
         early_stopping_patience=2,
