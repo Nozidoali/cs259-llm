@@ -115,7 +115,8 @@ class MultiDatasetEvalTrainer(Trainer):
             loss, outputs = super().compute_loss(model, inputs, return_outputs=True)
         
         # Add L2 regularization on trainable parameters
-        if self.l2_regularization > 0 and self.training:
+        # Check if model is in training mode (not eval mode)
+        if self.l2_regularization > 0 and model.training:
             l2_reg = torch.tensor(0.0, device=loss.device, dtype=loss.dtype)
             for name, param in model.named_parameters():
                 if param.requires_grad:
