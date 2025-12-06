@@ -83,8 +83,9 @@ TRAINING_CONFIG = {
 
 BLEURT_CONFIG = {
     "model_name": "bleurt-large-128",
-    "max_new_tokens": 50,
+    "max_new_tokens": 20,
     "prompt_template": "Question: {question}\nAnswer:",
+    "repetition_penalty": 1.2,  # Penalize repetition (1.0 = no penalty, higher = more penalty)
 }
 
 DATASET_CONFIG = {

@@ -18,7 +18,10 @@ except:
     pass
 
 class MultiDatasetEvalTrainer(Trainer):
-    def __init__(self, *args, eval_datasets=None, model_type="causal", qmsum_max_new_tokens=200, temperature=0.0, output_head_params=None, l2_regularization=0.0, **kwargs):
+    def __init__(self, *args, eval_datasets=None, model_type="causal", qmsum_max_new_tokens=200, temperature=0.0, **kwargs):
+        if 'tokenizer' in kwargs and 'processing_class' not in kwargs:
+            kwargs['processing_class'] = kwargs.pop('tokenizer')
+        
         super().__init__(*args, **kwargs)
         self.eval_datasets = eval_datasets or {}
         self.model_type = model_type
@@ -26,7 +29,6 @@ class MultiDatasetEvalTrainer(Trainer):
         self._bleurt = None
         self._rouge = None
         self.temperature = temperature
-        self.output_head_params = set(output_head_params) if output_head_params else set()
         self.l2_regularization = l2_regularization
     
     @property
@@ -48,26 +50,6 @@ class MultiDatasetEvalTrainer(Trainer):
             import evaluate
             self._rouge = evaluate.load("rouge")
         return self._rouge
-    
-    def create_optimizer(self):
-        if self.optimizer is None:
-            if self.output_head_params:
-                decay_parameters = [n for n in self.get_decay_parameter_names(self.model) if "bias" not in n]
-                optimizer_grouped_parameters = [
-                    {
-                        "params": [p for n, p in self.model.named_parameters() if n in decay_parameters and p.requires_grad and p not in self.output_head_params],
-                        "weight_decay": self.args.weight_decay,
-                    },
-                    {
-                        "params": [p for n, p in self.model.named_parameters() if n not in decay_parameters and p.requires_grad and p not in self.output_head_params],
-                        "weight_decay": 0.0,
-                    },
-                ]
-                optimizer_cls, optimizer_kwargs = self.get_optimizer_cls_and_kwargs(self.args)
-                self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
-            else:
-                super().create_optimizer()
-        return self.optimizer
     
     def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval"):
         was_training = self.model.training
@@ -132,7 +114,8 @@ class MultiDatasetEvalTrainer(Trainer):
         all_incorrect_refs = []
         tokenizer = self._get_tokenizer
         
-        # Store examples for readable logging
+        logger.info(f"Starting TruthfulQA evaluation on {len(eval_dataset)} examples...")
+        
         example_logs = []
         
         for idx, example in enumerate(eval_dataset):
@@ -148,12 +131,30 @@ class MultiDatasetEvalTrainer(Trainer):
                 try:
                     do_sample = self.temperature > 0.0
                     pad_token_id = tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else tokenizer.pad_token_id
-                    outputs = self.model.generate(**inputs, max_new_tokens=BLEURT_CONFIG["max_new_tokens"], temperature=self.temperature if do_sample else None, do_sample=do_sample, pad_token_id=pad_token_id, use_cache=True)
+                    outputs = self.model.generate(
+                        **inputs, 
+                        max_new_tokens=BLEURT_CONFIG["max_new_tokens"], 
+                        temperature=self.temperature if do_sample else None, 
+                        do_sample=do_sample, 
+                        pad_token_id=pad_token_id, 
+                        repetition_penalty=BLEURT_CONFIG.get("repetition_penalty", 1.0),
+                        use_cache=True
+                    )
                 except Exception as e:
                     logger.warning(f"Generation failed: {e}, skipping example")
                     continue
             generated = tokenizer.decode(outputs[0], skip_special_tokens=True)
             pred = generated.split("Answer:")[-1].strip() if "Answer:" in generated else generated[len(prompt):].strip()
+            
+            if idx < 5 or (idx + 1) % 20 == 0:
+                logger.info(f"\n{'='*80}")
+                logger.info(f"Example {idx + 1}/{len(eval_dataset)}")
+                logger.info(f"Question: {question}")
+                logger.info(f"Generated Answer: {pred}")
+                logger.info(f"Correct Answers (sample): {correct_answers[0] if correct_answers else 'N/A'}")
+                logger.info(f"Incorrect Answers (sample): {incorrect_answers[0] if incorrect_answers else 'N/A'}")
+                logger.info(f"{'='*80}\n")
+            
             if pred:
                 all_predictions.append(pred)
                 all_correct_refs.append(correct_answers)
@@ -249,7 +250,15 @@ class MultiDatasetEvalTrainer(Trainer):
                 try:
                     do_sample = self.temperature > 0.0
                     pad_token_id = tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else tokenizer.pad_token_id
-                    outputs = self.model.generate(**inputs, max_new_tokens=self.qmsum_max_new_tokens, temperature=self.temperature if do_sample else None, do_sample=do_sample, pad_token_id=pad_token_id, use_cache=True)
+                    outputs = self.model.generate(
+                        **inputs, 
+                        max_new_tokens=self.qmsum_max_new_tokens, 
+                        temperature=self.temperature if do_sample else None, 
+                        do_sample=do_sample, 
+                        pad_token_id=pad_token_id, 
+                        repetition_penalty=BLEURT_CONFIG.get("repetition_penalty", 1.0),
+                        use_cache=True
+                    )
                 except Exception as e:
                     logger.warning(f"Generation failed: {e}, skipping example")
                     continue

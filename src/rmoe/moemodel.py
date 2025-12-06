@@ -14,7 +14,7 @@ if sys_path not in sys.path:
     sys.path.insert(0, sys_path)
 
 from models import load_model_and_tokenizer
-from gating.gatingmodel import GatingNetwork, GatingModelWrapper
+from gating.gatingmodel import GatingNetwork
 from gating.gatingdataset import load_base_model_for_embeddings
 
 logger = logging.getLogger(__name__)
@@ -120,8 +120,10 @@ class MoEModel(nn.Module):
         gating_network.load_state_dict(state_dict)
         gating_network = gating_network.to(self.device)
         
-        self.gating_model = GatingModelWrapper(base_model_for_emb, gating_network)
-        self.gating_model.eval()
+        self.gating_network = gating_network
+        self.gating_network.eval()
+        self.embedding_model = base_model_for_emb
+        self.embedding_model.eval()
         self._current_gating_probs = None
         if hasattr(base_model, 'model') and hasattr(base_model.model, 'layers'):
             layers = base_model.model.layers
@@ -160,6 +162,21 @@ class MoEModel(nn.Module):
             self.lm_head = base_model.model.lm_head
         logger.info(f"MoE model initialized with {len(expert_paths)} experts, routing_mode={routing_mode}")
     
+    def _get_embeddings(self, input_ids, attention_mask):
+        with torch.no_grad():
+            if hasattr(self.embedding_model, 'model') and hasattr(self.embedding_model.model, 'embed_tokens'):
+                embeddings = self.embedding_model.model.embed_tokens(input_ids)
+            elif hasattr(self.embedding_model, 'transformer') and hasattr(self.embedding_model.transformer, 'wte'):
+                embeddings = self.embedding_model.transformer.wte(input_ids)
+            else:
+                raise ValueError("Could not find embedding layer in embedding model")
+            
+            mask_expanded = attention_mask.unsqueeze(-1).expand(embeddings.size()).to(embeddings.dtype)
+            sum_embeddings = torch.sum(embeddings * mask_expanded, dim=1)
+            sum_mask = torch.clamp(attention_mask.sum(dim=1, keepdim=True), min=1e-9).to(embeddings.dtype)
+            mean_embeddings = sum_embeddings / sum_mask
+        return mean_embeddings
+    
     def forward(self, input_ids, attention_mask=None, labels=None, **kwargs):
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
@@ -171,8 +188,8 @@ class MoEModel(nn.Module):
             hidden_states = self.model.layer_norm(hidden_states)
         batch_size, seq_len = input_ids.shape
         with torch.no_grad():
-            gating_input = self.gating_model.get_embeddings(input_ids, attention_mask)
-            gating_probs = self.gating_model(gating_input)
+            gating_input = self._get_embeddings(input_ids, attention_mask)
+            gating_probs = self.gating_network(gating_input)
         self._current_gating_probs = gating_probs
         if hasattr(self.model, 'layers'):
             for layer in self.model.layers:
@@ -201,8 +218,8 @@ class MoEModel(nn.Module):
         self.eval()
         with torch.no_grad():
             batch_size, seq_len = input_ids.shape
-            gating_input = self.gating_model.get_embeddings(input_ids, attention_mask)
-            gating_probs = self.gating_model(gating_input)
+            gating_input = self._get_embeddings(input_ids, attention_mask)
+            gating_probs = self.gating_network(gating_input)
             self._current_gating_probs = gating_probs
             generated = input_ids.clone()
             for _ in range(max_new_tokens):
@@ -245,10 +262,16 @@ class MoEModel(nn.Module):
                         object.__setattr__(layer.mlp, 'parent_model', original_parent_refs[id(layer.mlp)])
         
         self.tokenizer.save_pretrained(str(save_directory))
-        self.gating_model.save_pretrained(str(save_directory / "gating"))
+        self.gating_network.save_pretrained(str(save_directory / "gating"))
+        
+        if hasattr(self.model, 'layers') and len(self.model.layers) > 0:
+            num_experts = len(self.model.layers[0].mlp.expert_mlps) if hasattr(self.model.layers[0].mlp, 'expert_mlps') else 0
+        else:
+            num_experts = 0
+        
         config = {
             "model_type": "moe",
-            "num_experts": len(self.gating_model.gating_network.num_classes) if hasattr(self.gating_model, 'gating_network') and hasattr(self.gating_model.gating_network, 'num_classes') else len([m for m in self.model.layers[0].mlp.expert_mlps]) if hasattr(self.model, 'layers') else 0,
+            "num_experts": num_experts,
             "routing_mode": self.routing_mode,
         }
         with open(save_directory / "moe_config.json", "w") as f:

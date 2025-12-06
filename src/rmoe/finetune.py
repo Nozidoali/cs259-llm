@@ -2,7 +2,7 @@ import os
 import torch
 import logging
 from pathlib import Path
-from transformers import TrainingArguments, DataCollatorForLanguageModeling
+from transformers import TrainingArguments, DataCollatorForLanguageModeling, EarlyStoppingCallback
 from models import load_model_and_tokenizer, freeze_all_except_mlp
 from data import prepare_truthfulqa_dataset, prepare_qmsum_dataset
 from rmoe.trainer import MultiDatasetEvalTrainer
@@ -52,11 +52,7 @@ def train_expert(
     
     model = model.to(device)
     logger.info("Freezing all parameters except MLP layers...")
-    mlp_params_count, output_head_params = freeze_all_except_mlp(model)
-    
-    if hasattr(model, "gradient_checkpointing_enable"):
-        model.gradient_checkpointing_enable()
-        logger.info("Gradient checkpointing enabled")
+    freeze_all_except_mlp(model)
     
     model.train()
     full_dataset = prepare_dataset(dataset_name, tokenizer, max_length, keep_metadata=True)
@@ -115,10 +111,16 @@ def train_expert(
         dataloader_num_workers=0 if use_mps else 2,
         report_to=["tensorboard"],
         seed=seed,
-        gradient_checkpointing=True,
+        gradient_checkpointing=False,  # Disabled: incompatible with frozen parameters
         dataloader_pin_memory=False,
     )
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+    
+    early_stopping_callback = EarlyStoppingCallback(
+        early_stopping_patience=2,
+        early_stopping_threshold=0.0
+    )
+    
     trainer = MultiDatasetEvalTrainer(
         model=model,
         args=training_args,
@@ -130,9 +132,16 @@ def train_expert(
         model_type="causal",
         qmsum_max_new_tokens=qmsum_max_new_tokens,
         temperature=temperature,
-        output_head_params=output_head_params,
+        callbacks=[early_stopping_callback],
         l2_regularization=l2_regularization,
     )
+    
+    # Run initial evaluation before training to establish baseline
+    logger.info("Running initial evaluation before training (Epoch 0)...")
+    model.eval()
+    initial_metrics = trainer.evaluate()
+    logger.info(f"Initial evaluation results (before training): {initial_metrics}")
+    
     logger.info("Starting training...")
     trainer.train()
     logger.info(f"Saving model to: {output_dir}")

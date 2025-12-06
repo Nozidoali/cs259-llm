@@ -22,7 +22,9 @@ def evaluate_truthfulqa(model, tokenizer, dataset, device=None, temperature=0.0)
         all_correct_refs = []
         all_incorrect_refs = []
         
-        for example in dataset:
+        logger.info(f"Starting TruthfulQA evaluation on {len(dataset)} examples...")
+        
+        for idx, example in enumerate(dataset):
             question = example.get("question", "")
             correct_answers = example.get("correct_answers", [])
             incorrect_answers = example.get("incorrect_answers", [])
@@ -33,9 +35,26 @@ def evaluate_truthfulqa(model, tokenizer, dataset, device=None, temperature=0.0)
             inputs = {k: v.to(gen_device) for k, v in inputs.items()}
             with torch.no_grad():
                 do_sample = temperature > 0.0
-                outputs = model.generate(**inputs, max_new_tokens=BLEURT_CONFIG["max_new_tokens"], temperature=temperature if do_sample else None, do_sample=do_sample, pad_token_id=tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else tokenizer.pad_token_id)
+                outputs = model.generate(
+                    **inputs, 
+                    max_new_tokens=BLEURT_CONFIG["max_new_tokens"], 
+                    temperature=temperature if do_sample else None, 
+                    do_sample=do_sample, 
+                    pad_token_id=tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else tokenizer.pad_token_id,
+                    repetition_penalty=BLEURT_CONFIG.get("repetition_penalty", 1.0)
+                )
             generated = tokenizer.decode(outputs[0], skip_special_tokens=True)
             pred = generated.split("Answer:")[-1].strip() if "Answer:" in generated else generated[len(prompt):].strip()
+            
+            if idx < 5 or (idx + 1) % 20 == 0:
+                logger.info(f"\n{'='*80}")
+                logger.info(f"Example {idx + 1}/{len(dataset)}")
+                logger.info(f"Input Prompt: {prompt}")
+                logger.info(f"Generated Answer: {pred}")
+                logger.info(f"Correct Answers (sample): {correct_answers[0] if correct_answers else 'N/A'}")
+                logger.info(f"Incorrect Answers (sample): {incorrect_answers[0] if incorrect_answers else 'N/A'}")
+                logger.info(f"{'='*80}\n")
+            
             if pred:
                 all_predictions.append(pred)
                 all_correct_refs.append(correct_answers)
@@ -106,7 +125,14 @@ def evaluate_qmsum(model, tokenizer, dataset, device=None, max_new_tokens=200, t
             input_ids_len = inputs['input_ids'].shape[1]
             with torch.no_grad():
                 do_sample = temperature > 0.0
-                outputs = model.generate(**inputs, max_new_tokens=max_new_tokens, temperature=temperature if do_sample else None, do_sample=do_sample, pad_token_id=tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else tokenizer.pad_token_id)
+                outputs = model.generate(
+                    **inputs, 
+                    max_new_tokens=max_new_tokens, 
+                    temperature=temperature if do_sample else None, 
+                    do_sample=do_sample, 
+                    pad_token_id=tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else tokenizer.pad_token_id,
+                    repetition_penalty=BLEURT_CONFIG.get("repetition_penalty", 1.0)
+                )
             full_sequences = outputs.sequences[0] if hasattr(outputs, "sequences") else outputs[0]
             generated_ids = full_sequences[input_ids_len:]
             full_text = tokenizer.decode(full_sequences, skip_special_tokens=True).strip()

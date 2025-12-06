@@ -45,35 +45,9 @@ def freeze_all_except_mlp(model):
     else:
         raise ValueError(f"Unsupported model architecture. Model type: {type(model).__name__}, attributes: {[attr for attr in dir(model) if not attr.startswith('_')]}")
     
-    # Unfreeze output head for gradient computation (but will be excluded from optimizer)
-    output_head_params = []
-    output_head_params_count = 0
-    if hasattr(model, 'lm_head'):
-        for param in model.lm_head.parameters():
-            param.requires_grad = True
-            output_head_params.append(param)
-            output_head_params_count += 1
-    elif hasattr(model, 'output'):
-        for param in model.output.parameters():
-            param.requires_grad = True
-            output_head_params.append(param)
-            output_head_params_count += 1
-    elif hasattr(model, 'embed_out'):
-        for param in model.embed_out.parameters():
-            param.requires_grad = True
-            output_head_params.append(param)
-            output_head_params_count += 1
-    elif hasattr(model, 'model') and hasattr(model.model, 'lm_head'):
-        for param in model.model.lm_head.parameters():
-            param.requires_grad = True
-            output_head_params.append(param)
-            output_head_params_count += 1
-    
     logger.info(f"Unfrozen {mlp_params_count} MLP parameters")
-    if output_head_params_count > 0:
-        logger.info(f"Unfrozen {output_head_params_count} output head parameters (for gradient flow, excluded from optimizer)")
     
-    return mlp_params_count, output_head_params
+    return mlp_params_count
 
 def count_parameters(model):
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -85,7 +59,7 @@ def count_parameters(model):
     logger.info(f"Trainable percentage: {100 * trainable_params / total_params:.2f}%")
     return {"total": total_params, "trainable": trainable_params, "frozen": frozen_params, "trainable_percentage": 100 * trainable_params / total_params}
 
-def load_model_and_tokenizer(model_key_or_path=None, model_path=None, return_config_info=False, dtype=None):
+def load_model_and_tokenizer(model_key_or_path=None, model_path=None, return_config_info=False, dtype=None, enable_gradient_checkpointing=False):
     if model_key_or_path is None and model_path is None:
         raise ValueError("Either model_key_or_path or model_path must be provided")
     if model_key_or_path and model_key_or_path in MODEL_CONFIGS:
@@ -124,8 +98,9 @@ def load_model_and_tokenizer(model_key_or_path=None, model_path=None, return_con
         model = AutoModelForSeq2SeqLM.from_pretrained(model_id, dtype=model_dtype)
     else:
         model = AutoModelForCausalLM.from_pretrained(model_id, dtype=model_dtype)
-    if hasattr(model, "gradient_checkpointing_enable"):
+    if enable_gradient_checkpointing and hasattr(model, "gradient_checkpointing_enable"):
         model.gradient_checkpointing_enable()
+        logger.info("Gradient checkpointing enabled")
     if return_config_info:
         return model, tokenizer, output_dir, model_type
     else:
