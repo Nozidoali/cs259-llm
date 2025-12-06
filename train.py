@@ -49,14 +49,16 @@ def main():
         logger.error("Config must specify method: 'rmoe'")
         sys.exit(1)
     
-    # Get timestamp from environment variable (must be set in start-command.sh)
+    # Get timestamp from environment variable or generate one
     timestamp = os.getenv("WORKSPACE_TIMESTAMP")
     if not timestamp:
-        logger.error("WORKSPACE_TIMESTAMP environment variable is not set. It must be set in start-command.sh")
-        sys.exit(1)
-    if len(timestamp) != 15 or timestamp[8] != '_':
-        logger.warning(f"Timestamp format may be incorrect. Expected: YYYYMMDD_HHMMSS, got: {timestamp}")
-    logger.info(f"Using timestamp from WORKSPACE_TIMESTAMP environment variable: {timestamp}")
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        logger.warning(f"WORKSPACE_TIMESTAMP environment variable is not set. Auto-generated timestamp: {timestamp}")
+    else:
+        if len(timestamp) != 15 or timestamp[8] != '_':
+            logger.warning(f"Timestamp format may be incorrect. Expected: YYYYMMDD_HHMMSS, got: {timestamp}")
+        logger.info(f"Using timestamp from WORKSPACE_TIMESTAMP environment variable: {timestamp}")
     work_dir = WORK_DIR / "workspace" / timestamp
     work_dir.mkdir(parents=True, exist_ok=True)
     log_file = work_dir / "train.log"

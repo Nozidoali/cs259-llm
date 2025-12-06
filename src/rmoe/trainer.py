@@ -18,7 +18,7 @@ except:
     pass
 
 class MultiDatasetEvalTrainer(Trainer):
-    def __init__(self, *args, eval_datasets=None, model_type="causal", qmsum_max_new_tokens=200, temperature=0.0, **kwargs):
+    def __init__(self, *args, eval_datasets=None, model_type="causal", qmsum_max_new_tokens=200, temperature=0.0, l2_regularization=0.0, **kwargs):
         if 'tokenizer' in kwargs and 'processing_class' not in kwargs:
             kwargs['processing_class'] = kwargs.pop('tokenizer')
         
