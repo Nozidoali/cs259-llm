@@ -51,14 +51,6 @@ MODEL_CONFIGS = [
         "layers": 28,
     },
     
-    # Llama 3.1 7B (Llama 3.2 doesn't have 7B variant)
-    {
-        "name": "llama-3.1-8b",
-        "hf_repo": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
-        "quantizations": ["Q4_K_M", "Q8_0"],
-        "param_size": "8B",
-        "layers": 32,
-    },
     
     # Qwen models (different sizes)
     {
@@ -82,22 +74,7 @@ MODEL_CONFIGS = [
         "param_size": "3B",
         "layers": 36,
     },
-    {
-        "name": "qwen2.5-7b",
-        "hf_repo": "Qwen/Qwen2.5-7B-Instruct-GGUF",
-        "quantizations": ["q4_k_m", "q8_0"],
-        "param_size": "7B",
-        "layers": 28,
-    },
-    
-    # Mistral 7B
-    {
-        "name": "mistral-7b-v0.3",
-        "hf_repo": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
-        "quantizations": ["Q4_K_M", "Q8_0"],
-        "param_size": "7B",
-        "layers": 32,
-    },
+
     
     # Phi models (different sizes)
     {
@@ -136,6 +113,40 @@ MODEL_CONFIGS = [
         "quantizations": ["Q4_K_M", "Q8_0"],
         "param_size": "774M",
         "layers": 36,
+    },
+    
+    # TinyLlama (sub-1B)
+    {
+        "name": "tinyllama-1.1b",
+        "hf_repo": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
+        "quantizations": ["Q4_K_M", "Q8_0"],
+        "param_size": "1.1B",
+        "layers": 22,
+    },
+    
+    # SmolLM models (very tiny)
+    {
+        "name": "smollm-135m",
+        "hf_repo": "mradermacher/SmolLM-135M-Instruct-GGUF",
+        "quantizations": ["Q4_K_M", "Q8_0"],
+        "param_size": "135M",
+        "layers": 30,
+    },
+    {
+        "name": "smollm-360m",
+        "hf_repo": "mradermacher/SmolLM-360M-Instruct-GGUF",
+        "quantizations": ["Q4_K_M", "Q8_0"],
+        "param_size": "360M",
+        "layers": 32,
+    },
+    
+    # StableLM (compact models)
+    {
+        "name": "stablelm-zephyr-3b",
+        "hf_repo": "mradermacher/stablelm-zephyr-3b-GGUF",
+        "quantizations": ["Q4_K_M", "Q8_0"],
+        "param_size": "3B",
+        "layers": 32,
     },
 ]
 
@@ -194,6 +205,57 @@ class ModelBenchmarker:
         """Check if a model+quantization combination has already been benchmarked."""
         key = (model_name, quantization)
         return key in self.existing_results
+    
+    def cleanup_benchmarked_models(self) -> Tuple[int, float]:
+        """
+        Remove model files from models/benchmark folder if they're already in benchmarks.csv.
+        Returns: (count_removed, mb_freed)
+        """
+        if not self.existing_results:
+            logger.info("No existing benchmarks found - skipping cleanup")
+            return 0, 0.0
+        
+        count_removed = 0
+        mb_freed = 0.0
+        
+        logger.info(f"\nChecking {self.models_dir} for already-benchmarked models...")
+        
+        # Get all GGUF files in models directory
+        gguf_files = list(self.models_dir.glob("*.gguf"))
+        
+        if not gguf_files:
+            logger.info("No GGUF files found in models directory")
+            return 0, 0.0
+        
+        logger.info(f"Found {len(gguf_files)} GGUF files")
+        
+        # Check each file against benchmarks.csv
+        for model_file in gguf_files:
+            filename = model_file.name
+            
+            # Try to match filename to benchmarked models
+            found_in_benchmarks = False
+            for (model_name, quant), result in self.existing_results.items():
+                if result.get('filename') == filename:
+                    found_in_benchmarks = True
+                    break
+            
+            if found_in_benchmarks:
+                file_size_mb = model_file.stat().st_size / (1024 * 1024)
+                logger.info(f"  Removing {filename} ({file_size_mb:.2f} MB) - already benchmarked")
+                try:
+                    model_file.unlink()
+                    count_removed += 1
+                    mb_freed += file_size_mb
+                except Exception as e:
+                    logger.warning(f"  Failed to remove {filename}: {e}")
+        
+        if count_removed > 0:
+            logger.info(f"\n✓ Cleanup complete: Removed {count_removed} files, freed {mb_freed:.2f} MB")
+        else:
+            logger.info("\nNo benchmarked models found in models directory")
+        
+        return count_removed, mb_freed
         
     def download_model(self, hf_repo: str, filename: str) -> Optional[Path]:
         """Download a GGUF model from HuggingFace."""
@@ -419,6 +481,18 @@ class ModelBenchmarker:
                 return f"gpt2-medium.{quant}.gguf"
             elif name == "gpt2-large":
                 return f"gpt2-large.{quant}.gguf"
+        elif "tinyllama" in name:
+            # TheBloke uses: tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+            return f"tinyllama-1.1b-chat-v1.0.{quant}.gguf"
+        elif "smollm" in name:
+            # mradermacher uses: SmolLM-135M-Instruct.Q4_K_M.gguf
+            if "135m" in name:
+                return f"SmolLM-135M-Instruct.{quant}.gguf"
+            elif "360m" in name:
+                return f"SmolLM-360M-Instruct.{quant}.gguf"
+        elif "stablelm" in name:
+            # mradermacher uses: stablelm-zephyr-3b.Q4_K_M.gguf
+            return f"stablelm-zephyr-3b.{quant}.gguf"
         
         # Fallback
         return f"{name}-{quant}.gguf"
@@ -474,6 +548,15 @@ class ModelBenchmarker:
             "timestamp": datetime.now().isoformat()
         }
         
+        # Step 5: Auto-cleanup local model file to save disk space (unless --keep-models)
+        if not self.args.keep_models:
+            try:
+                file_size_mb = self.get_model_size_mb(local_path)
+                local_path.unlink()
+                logger.info(f"  Removed local model file to free {file_size_mb:.2f} MB")
+            except Exception as e:
+                logger.warning(f"  Failed to remove local model: {e}")
+        
         logger.info(f"✓ Completed {model_name} ({quant})")
         return result
     
@@ -514,6 +597,13 @@ class ModelBenchmarker:
     
     def run(self):
         """Main execution loop."""
+        # Cleanup already-benchmarked models first to free disk space
+        if self.args.cleanup:
+            count, mb = self.cleanup_benchmarked_models()
+            if not self.args.benchmark:
+                # Cleanup-only mode
+                return
+        
         # Filter models if in debug mode
         if self.args.debug:
             logger.info("DEBUG MODE: Testing smallest model only")
@@ -619,8 +709,31 @@ def main():
         action="store_true",
         help="Debug mode: only test the smallest model (gpt2)"
     )
+    parser.add_argument(
+        "--cleanup",
+        action="store_true",
+        help="Remove already-benchmarked models from models directory to free disk space"
+    )
+    parser.add_argument(
+        "--no-benchmark",
+        dest="benchmark",
+        action="store_false",
+        default=True,
+        help="Skip benchmarking, only perform cleanup (requires --cleanup)"
+    )
+    parser.add_argument(
+        "--keep-models",
+        action="store_true",
+        help="Keep model files after benchmarking (default: auto-cleanup after each benchmark)"
+    )
     
     args = parser.parse_args()
+    
+    # Validate arguments
+    if not args.benchmark and not args.cleanup:
+        parser.error("--no-benchmark requires --cleanup to be set")
+    if not args.benchmark:
+        args.cleanup = True  # Force cleanup mode if not benchmarking
     
     try:
         benchmarker = ModelBenchmarker(args)

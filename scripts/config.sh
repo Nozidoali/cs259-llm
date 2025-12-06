@@ -5,7 +5,7 @@
 
 # SSH connection command
 # Format: ssh user@host [-p PORT] [-i ~/.ssh/key]
-SSH_CMD="${SSH_CMD:-ssh root@69.19.136.225 -p 21109 -i ~/.ssh/id_ed25519}"
+SSH_CMD="${SSH_CMD:-ssh root@69.19.136.225 -p 46289 -i ~/.ssh/id_ed25519}"
 
 # Date string for workspace directory (YYYYMMDD_HHMMSS format)
 # Leave empty to auto-detect the latest workspace

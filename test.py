@@ -95,6 +95,9 @@ def main():
         env_vars["M"] = config["model"]
     if config.get("device") is not None:
         env_vars["D"] = str(config["device"])
+    # Set LLAMA_LOG_LEVEL to debug for verbose llama.cpp logging
+    env_vars["LLAMA_LOG_LEVEL"] = "debug"
+    
     original_env = {}
     for key, value in env_vars.items():
         if value is not None:
