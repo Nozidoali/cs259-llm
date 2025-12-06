@@ -48,14 +48,15 @@ def main():
     if config.get("method") != "rmoe":
         logger.error("Config must specify method: 'rmoe'")
         sys.exit(1)
-    if config.get("datetime"):
-        timestamp = config.get("datetime")
-        if len(timestamp) != 15 or timestamp[8] != '_':
-            logger.warning(f"Datetime format may be incorrect. Expected: YYYYMMDD_HHMMSS, got: {timestamp}")
-        logger.info(f"Using datetime from config: {timestamp}")
-    else:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        logger.info(f"Generated new timestamp: {timestamp}")
+    
+    # Get timestamp from environment variable (must be set in start-command.sh)
+    timestamp = os.getenv("WORKSPACE_TIMESTAMP")
+    if not timestamp:
+        logger.error("WORKSPACE_TIMESTAMP environment variable is not set. It must be set in start-command.sh")
+        sys.exit(1)
+    if len(timestamp) != 15 or timestamp[8] != '_':
+        logger.warning(f"Timestamp format may be incorrect. Expected: YYYYMMDD_HHMMSS, got: {timestamp}")
+    logger.info(f"Using timestamp from WORKSPACE_TIMESTAMP environment variable: {timestamp}")
     work_dir = WORK_DIR / "workspace" / timestamp
     work_dir.mkdir(parents=True, exist_ok=True)
     log_file = work_dir / "train.log"
@@ -80,6 +81,12 @@ def main():
         all_experts_exist = all((work_dir / "experts" / d).exists() and (work_dir / "experts" / d / "config.json").exists() for d in datasets)
         
         if not args.skip_experts and not all_experts_exist:
+            # Use shared logging directory for all experts so they appear in the same TensorBoard
+            shared_logging_dir = work_dir / "logs"
+            shared_logging_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Using shared TensorBoard logging directory: {shared_logging_dir}")
+            logger.info("All expert training curves will be stored in the same directory")
+            
             for dataset_name in datasets:
                 logger.info(f"=" * 60)
                 logger.info(f"Training expert for dataset: {dataset_name}")
@@ -100,6 +107,7 @@ def main():
                     seed=config.get("seed", 42),
                     qmsum_max_new_tokens=expert_config.get("qmsum_max_new_tokens", 200),
                     temperature=expert_config.get("temperature", 0.0),
+                    shared_logging_dir=shared_logging_dir,
                 )
                 expert_paths.append(expert_output_dir)
         else:

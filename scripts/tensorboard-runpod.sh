@@ -1,130 +1,238 @@
 #!/bin/bash
 
-# TensorBoard Launcher for RunPod
-# This script starts TensorBoard to view training logs via RunPod HTTP Service
+# TensorBoard Launcher for RunPod via SSH
+# This script starts TensorBoard on RunPod and sets up port forwarding
+# Run this from your local terminal to access TensorBoard remotely
 
-# Default port
-PORT="${TENSORBOARD_PORT:-6006}"
-
-# Try to find WORK_DIR from environment or use default
-# Check if we're in the project directory
+# Source shared configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-# Try to get WORK_DIR from .env file if it exists
-if [ -f "$PROJECT_DIR/.env" ]; then
-    WORK_DIR=$(grep "^WORK_DIR=" "$PROJECT_DIR/.env" | cut -d '=' -f2 | tr -d '"' | tr -d "'" | xargs)
+if [ -f "$SCRIPT_DIR/config.sh" ]; then
+    source "$SCRIPT_DIR/config.sh"
+else
+    echo "Warning: config.sh not found. Using defaults."
+    SSH_CMD="${SSH_CMD:-ssh root@69.19.136.225 -p 37178 -i ~/.ssh/id_ed25519}"
+    REMOTE_WORK_DIR="${REMOTE_WORK_DIR:-/workspace/cs259-llm}"
+    TENSORBOARD_PORT="${TENSORBOARD_PORT:-6006}"
 fi
 
-# Use WORK_DIR from environment, .env, or default
-WORK_DIR="${WORK_DIR:-${WORKSPACE_DIR:-$PROJECT_DIR}}"
-WORKSPACE_DIR="$WORK_DIR/workspace"
+# WORKSPACE_TIMESTAMP can be set in config.sh or as environment variable
+WORKSPACE_TIMESTAMP="${WORKSPACE_TIMESTAMP:-}"
 
-LOG_DIR=""
+PORT="${TENSORBOARD_PORT:-6006}"
+REMOTE_WORKSPACE_DIR="$REMOTE_WORK_DIR/workspace"
 
-# Find the largest date string in the workspace folder (most recent timestamp)
-# Date format: YYYYMMDD_HHMMSS (e.g., 20251204_225232)
-# Since date strings are in YYYYMMDD_HHMMSS format, sorting them will naturally
-# put the largest (most recent) date first
-if [ -d "$WORKSPACE_DIR" ]; then
-    # Find all directories starting with "20" (year 2000+), sort in reverse to get largest date string
-    LATEST_DIR=$(find "$WORKSPACE_DIR" -maxdepth 1 -type d -name "20*" -printf "%f\n" 2>/dev/null | sort -r | head -1)
-    
-    # If printf is not available (macOS), use alternative method
-    if [ -z "$LATEST_DIR" ]; then
-        LATEST_DIR=$(find "$WORKSPACE_DIR" -maxdepth 1 -type d -name "20*" 2>/dev/null | xargs -n1 basename | sort -r | head -1)
-    fi
-    
-    if [ -n "$LATEST_DIR" ]; then
-        LOG_DIR="$WORKSPACE_DIR/$LATEST_DIR"
-        if [ -d "$LOG_DIR" ]; then
-            echo "Found workspace with largest date string: $LOG_DIR"
-        else
-            LOG_DIR=""
-        fi
-    fi
+# Extract user@host, port, and identity file from SSH command
+SSH_USER_HOST=""
+SSH_PORT=""
+SSH_KEY=""
+
+# Try to match: ssh user@host -p PORT -i KEY
+if [[ $SSH_CMD =~ ssh[[:space:]]+([^[:space:]]+)[[:space:]]+-p[[:space:]]+([0-9]+)[[:space:]]+-i[[:space:]]+([^[:space:]]+) ]]; then
+    SSH_USER_HOST="${BASH_REMATCH[1]}"
+    SSH_PORT="${BASH_REMATCH[2]}"
+    SSH_KEY="${BASH_REMATCH[3]}"
+# Try to match: ssh user@host -p PORT
+elif [[ $SSH_CMD =~ ssh[[:space:]]+([^[:space:]]+)[[:space:]]+-p[[:space:]]+([0-9]+) ]]; then
+    SSH_USER_HOST="${BASH_REMATCH[1]}"
+    SSH_PORT="${BASH_REMATCH[2]}"
+# Try to match: ssh user@host -i KEY
+elif [[ $SSH_CMD =~ ssh[[:space:]]+([^[:space:]]+)[[:space:]]+-i[[:space:]]+([^[:space:]]+) ]]; then
+    SSH_USER_HOST="${BASH_REMATCH[1]}"
+    SSH_KEY="${BASH_REMATCH[2]}"
+# Try to match: ssh user@host
+elif [[ $SSH_CMD =~ ssh[[:space:]]+([^[:space:]]+) ]]; then
+    SSH_USER_HOST="${BASH_REMATCH[1]}"
+else
+    echo "Error: Could not parse SSH connection string"
+    echo "Expected format: ssh user@host [-p PORT] [-i ~/.ssh/key]"
+    echo "Or set SSH_CMD environment variable"
+    exit 1
 fi
 
-# If no timestamped directory found, try to find any directory with TensorBoard event files
-if [ -z "$LOG_DIR" ] || [ ! -d "$LOG_DIR" ]; then
-    # Search for directories containing TensorBoard event files
-    if [ -d "$WORKSPACE_DIR" ]; then
-        EVENT_FILE=$(find "$WORKSPACE_DIR" -type f -name "events.out.tfevents.*" 2>/dev/null | head -1)
-        if [ -n "$EVENT_FILE" ]; then
-            EVENT_DIR=$(dirname "$EVENT_FILE")
-            # Get the parent workspace directory (go up from logs/experts/... or logs/rmoe_model...)
-            LOG_DIR="$EVENT_DIR"
-            # Try to find the workspace root by going up until we find a timestamped directory or workspace root
-            while [ "$LOG_DIR" != "$WORKSPACE_DIR" ] && [ "$LOG_DIR" != "/" ]; do
-                PARENT=$(dirname "$LOG_DIR")
-                if [[ "$(basename "$PARENT")" =~ ^20[0-9]{6} ]]; then
-                    LOG_DIR="$PARENT"
-                    break
-                fi
-                LOG_DIR="$PARENT"
-            done
-            if [ -d "$LOG_DIR" ]; then
-                echo "Found workspace with TensorBoard logs: $LOG_DIR"
-            fi
-        fi
-    fi
-fi
+# Expand tilde in SSH key path
+SSH_KEY="${SSH_KEY/#\~/$HOME}"
 
-# Verify that the log directory actually contains event files
-if [ -n "$LOG_DIR" ] && [ -d "$LOG_DIR" ]; then
-    EVENT_COUNT=$(find "$LOG_DIR" -type f -name "events.out.tfevents.*" 2>/dev/null | wc -l)
-    if [ "$EVENT_COUNT" -eq 0 ]; then
-        echo "Warning: No TensorBoard event files found in $LOG_DIR"
-        echo "This might mean:"
-        echo "  1. Training hasn't started yet"
-        echo "  2. Training hasn't reached logging_steps yet"
-        echo "  3. Logs are in a different location"
-        echo ""
-        echo "Searching for event files in subdirectories..."
-        find "$LOG_DIR" -type f -name "events.out.tfevents.*" 2>/dev/null | head -5
-        if [ $? -ne 0 ] || [ -z "$(find "$LOG_DIR" -type f -name "events.out.tfevents.*" 2>/dev/null | head -1)" ]; then
-            echo "No event files found. TensorBoard will start but may show no data until training progresses."
-        fi
-    else
-        echo "Found $EVENT_COUNT TensorBoard event file(s)"
-    fi
+# Build SSH command options
+SSH_OPTS="-tt -o LogLevel=ERROR"
+if [ -n "$SSH_PORT" ]; then
+    SSH_OPTS="-p $SSH_PORT $SSH_OPTS"
 fi
-
-# Fallback to workspace directory or explicit TENSORBOARD_LOG_DIR
-if [ -z "$LOG_DIR" ] || [ ! -d "$LOG_DIR" ]; then
-    if [ -d "$WORKSPACE_DIR" ]; then
-        LOG_DIR="$WORKSPACE_DIR"
-        echo "Using workspace directory: $LOG_DIR"
-    else
-        LOG_DIR="${TENSORBOARD_LOG_DIR:-$PROJECT_DIR}"
-        echo "Using fallback directory: $LOG_DIR"
-    fi
+if [ -n "$SSH_KEY" ]; then
+    SSH_OPTS="-i $SSH_KEY $SSH_OPTS"
 fi
 
 echo "========================================="
-echo "Starting TensorBoard"
+echo "TensorBoard Launcher for RunPod"
 echo "========================================="
-echo "WORK_DIR: $WORK_DIR"
-echo "WORKSPACE_DIR: $WORKSPACE_DIR"
-echo "Log directory: $LOG_DIR"
-echo "Port: $PORT"
-echo "========================================="
-if [ -d "$LOG_DIR" ]; then
-    echo ""
-    echo "Contents of log directory:"
-    ls -la "$LOG_DIR" | head -10
-    echo ""
-    echo "Searching for log subdirectories..."
-    find "$LOG_DIR" -type d -name "logs" 2>/dev/null | head -5
-    echo ""
+echo "SSH Host: $SSH_USER_HOST"
+if [ -n "$SSH_PORT" ]; then
+    echo "SSH Port: $SSH_PORT"
 fi
-echo "To access TensorBoard:"
-echo "1. Go to RunPod dashboard"
-echo "2. Click 'Connect' → 'HTTP Service'"
-echo "3. RunPod will provide a URL to access TensorBoard"
+if [ -n "$SSH_KEY" ]; then
+    echo "SSH Key: $SSH_KEY"
+fi
+echo "TensorBoard Port: $PORT"
+echo "Remote Work Dir: $REMOTE_WORK_DIR"
+if [ -n "$WORKSPACE_TIMESTAMP" ] && [ "$WORKSPACE_TIMESTAMP" != "" ]; then
+    echo "Workspace Timestamp: $WORKSPACE_TIMESTAMP"
+elif [ -n "$DATE_STR" ] && [ "$DATE_STR" != "" ]; then
+    echo "Date String: $DATE_STR"
+fi
 echo "========================================="
 echo ""
 
-# Start TensorBoard
-tensorboard --logdir="$LOG_DIR" --port="$PORT" --host=0.0.0.0 --reload_interval=30
+# Find the log directory on remote machine
+echo "Searching for TensorBoard logs on remote machine..."
+REMOTE_LOG_DIR=""
 
+# Check for WORKSPACE_TIMESTAMP first (set in start-command.sh), then DATE_STR
+if [ -n "$WORKSPACE_TIMESTAMP" ] && [ "$WORKSPACE_TIMESTAMP" != "" ]; then
+    REMOTE_LOG_DIR="$REMOTE_WORKSPACE_DIR/$WORKSPACE_TIMESTAMP/logs"
+    echo "Using workspace timestamp from config: $WORKSPACE_TIMESTAMP"
+    echo "TensorBoard log directory: $REMOTE_LOG_DIR"
+    
+    # Verify the directory exists
+    CHECK_DIR_CMD="test -d '$REMOTE_LOG_DIR' && echo 'exists' || echo 'not found'"
+    DIR_EXISTS=$(ssh $SSH_OPTS $SSH_USER_HOST "$CHECK_DIR_CMD" 2>/dev/null)
+    if [ "$DIR_EXISTS" != "exists" ]; then
+        echo "Warning: Directory $REMOTE_LOG_DIR does not exist on remote machine"
+        echo "Falling back to DATE_STR or auto-detection..."
+        REMOTE_LOG_DIR=""
+    fi
+elif [ -n "$DATE_STR" ] && [ "$DATE_STR" != "" ]; then
+    REMOTE_LOG_DIR="$REMOTE_WORKSPACE_DIR/$DATE_STR/logs"
+    echo "Using specified date string: $DATE_STR"
+    echo "TensorBoard log directory: $REMOTE_LOG_DIR"
+    
+    # Verify the directory exists
+    CHECK_DIR_CMD="test -d '$REMOTE_LOG_DIR' && echo 'exists' || echo 'not found'"
+    DIR_EXISTS=$(ssh $SSH_OPTS $SSH_USER_HOST "$CHECK_DIR_CMD" 2>/dev/null)
+    if [ "$DIR_EXISTS" != "exists" ]; then
+        echo "Warning: Directory $REMOTE_LOG_DIR does not exist on remote machine"
+        echo "Falling back to auto-detection..."
+        REMOTE_LOG_DIR=""
+    fi
+fi
+
+# If WORKSPACE_TIMESTAMP/DATE_STR not provided or directory doesn't exist, auto-detect
+if [ -z "$REMOTE_LOG_DIR" ] || [ "$REMOTE_LOG_DIR" == "" ]; then
+    # Try to find the latest timestamped directory with logs subdirectory
+    FIND_CMD="find $REMOTE_WORKSPACE_DIR -maxdepth 1 -type d -name '20*' 2>/dev/null | sort -r | head -1"
+    LATEST_DIR=$(ssh $SSH_OPTS $SSH_USER_HOST "$FIND_CMD" 2>/dev/null)
+    
+    if [ -n "$LATEST_DIR" ] && [ "$LATEST_DIR" != "" ]; then
+        # Check if logs subdirectory exists
+        CHECK_LOGS_CMD="test -d '$LATEST_DIR/logs' && echo '$LATEST_DIR/logs' || echo ''"
+        LOGS_DIR=$(ssh $SSH_OPTS $SSH_USER_HOST "$CHECK_LOGS_CMD" 2>/dev/null)
+        if [ -n "$LOGS_DIR" ] && [ "$LOGS_DIR" != "" ]; then
+            REMOTE_LOG_DIR="$LOGS_DIR"
+            echo "Found latest workspace with logs: $REMOTE_LOG_DIR"
+        else
+            REMOTE_LOG_DIR="$LATEST_DIR"
+            echo "Found latest workspace (no logs subdirectory): $REMOTE_LOG_DIR"
+        fi
+    else
+        # Try to find any directory with TensorBoard event files
+        FIND_EVENT_CMD="find $REMOTE_WORKSPACE_DIR -type f -name 'events.out.tfevents.*' 2>/dev/null | head -1"
+        EVENT_FILE=$(ssh $SSH_OPTS $SSH_USER_HOST "$FIND_EVENT_CMD" 2>/dev/null)
+        
+        if [ -n "$EVENT_FILE" ] && [ "$EVENT_FILE" != "" ]; then
+            # Get directory containing the event file
+            GET_DIR_CMD="dirname '$EVENT_FILE'"
+            EVENT_DIR=$(ssh $SSH_OPTS $SSH_USER_HOST "$GET_DIR_CMD" 2>/dev/null)
+            REMOTE_LOG_DIR="$EVENT_DIR"
+            echo "Found workspace with TensorBoard logs: $REMOTE_LOG_DIR"
+        fi
+    fi
+fi
+
+# Fallback to workspace directory
+if [ -z "$REMOTE_LOG_DIR" ] || [ "$REMOTE_LOG_DIR" == "" ]; then
+    REMOTE_LOG_DIR="$REMOTE_WORKSPACE_DIR"
+    echo "Using workspace directory: $REMOTE_LOG_DIR"
+fi
+
+# Verify event files exist
+echo ""
+echo "Checking for TensorBoard event files..."
+EVENT_COUNT_CMD="find '$REMOTE_LOG_DIR' -type f -name 'events.out.tfevents.*' 2>/dev/null | wc -l"
+EVENT_COUNT=$(ssh $SSH_OPTS $SSH_USER_HOST "$EVENT_COUNT_CMD" 2>/dev/null | tr -d ' ')
+
+if [ "$EVENT_COUNT" -eq "0" ] || [ -z "$EVENT_COUNT" ]; then
+    echo "Warning: No TensorBoard event files found in $REMOTE_LOG_DIR"
+    echo "TensorBoard will start but may show no data until training progresses."
+else
+    echo "Found $EVENT_COUNT TensorBoard event file(s)"
+fi
+
+echo ""
+echo "========================================="
+echo "Starting TensorBoard on RunPod"
+echo "========================================="
+echo "Log directory: $REMOTE_LOG_DIR"
+echo "Port: $PORT"
+echo ""
+echo "TensorBoard will be accessible at:"
+echo "  http://localhost:$PORT"
+echo ""
+echo "Press Ctrl+C to stop TensorBoard and port forwarding"
+echo "========================================="
+echo ""
+
+# Check if TensorBoard is already running on the remote machine
+CHECK_TB_CMD="pgrep -f 'tensorboard.*--port=$PORT' > /dev/null 2>&1"
+if ssh $SSH_OPTS $SSH_USER_HOST "$CHECK_TB_CMD"; then
+    echo "Warning: TensorBoard appears to be already running on port $PORT"
+    echo "Killing existing TensorBoard process..."
+    KILL_TB_CMD="pkill -f 'tensorboard.*--port=$PORT'"
+    ssh $SSH_OPTS $SSH_USER_HOST "$KILL_TB_CMD" 2>/dev/null
+    sleep 2
+fi
+
+# Start TensorBoard on remote machine in background and set up port forwarding
+echo "Starting TensorBoard on remote machine..."
+echo ""
+
+# Start TensorBoard in background on remote
+# We use nohup and redirect output to keep it running
+REMOTE_SCRIPT="cd $REMOTE_WORK_DIR && source venv/bin/activate 2>/dev/null || true && nohup tensorboard --logdir='$REMOTE_LOG_DIR' --port=$PORT --host=0.0.0.0 --reload_interval=30 > /tmp/tensorboard.log 2>&1 &"
+
+# Start TensorBoard
+if ! ssh $SSH_OPTS $SSH_USER_HOST "$REMOTE_SCRIPT"; then
+    echo "Error: Failed to start TensorBoard on remote machine"
+    echo "Check if TensorBoard is installed: ssh $SSH_OPTS $SSH_USER_HOST 'which tensorboard'"
+    exit 1
+fi
+
+echo "TensorBoard started on remote machine"
+echo "Waiting for TensorBoard to initialize..."
+sleep 3
+
+# Verify TensorBoard is running
+CHECK_TB_CMD="pgrep -f 'tensorboard.*--port=$PORT' > /dev/null 2>&1"
+if ! ssh $SSH_OPTS $SSH_USER_HOST "$CHECK_TB_CMD"; then
+    echo "Warning: TensorBoard may not have started correctly"
+    echo "Check logs: ssh $SSH_OPTS $SSH_USER_HOST 'tail -20 /tmp/tensorboard.log'"
+fi
+
+# Set up SSH port forwarding
+echo ""
+echo "Setting up SSH port forwarding..."
+echo "Forwarding localhost:$PORT -> $SSH_USER_HOST:$PORT"
+echo ""
+
+# Function to cleanup on exit
+cleanup() {
+    echo ""
+    echo "Stopping TensorBoard on remote machine..."
+    ssh $SSH_OPTS $SSH_USER_HOST "pkill -f 'tensorboard.*--port=$PORT'" 2>/dev/null
+    echo "TensorBoard stopped."
+    exit 0
+}
+
+trap cleanup SIGINT SIGTERM
+
+# Start port forwarding in foreground (this will block until Ctrl+C)
+# -N: don't execute remote command, just forward ports
+# -L: local port forwarding
+ssh $SSH_OPTS -N -L $PORT:localhost:$PORT $SSH_USER_HOST

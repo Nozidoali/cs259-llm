@@ -1,13 +1,25 @@
 #!/bin/bash
 
 # Script to download GGUF files from RunPod using SCP
-# Configure the SSH connection and date string below
+# Configure the SSH connection and date string in config.sh
 
-# Configuration - edit these values
-SSH_CMD="ssh root@69.19.136.225 -p 37178 -i ~/.ssh/id_ed25519"
-DATE_STR="20251205_021041"
-# Mobile destination path for adb push
-MOBILE_DEST="/data/local/tmp/gguf"
+# Source shared configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/config.sh" ]; then
+    source "$SCRIPT_DIR/config.sh"
+else
+    echo "Warning: config.sh not found. Using defaults."
+    SSH_CMD="${SSH_CMD:-ssh root@69.19.136.225 -p 37178 -i ~/.ssh/id_ed25519}"
+    DATE_STR="${DATE_STR:-20251205_021041}"
+    MOBILE_DEST="${MOBILE_DEST:-/data/local/tmp/gguf}"
+fi
+
+# DATE_STR is required for this script
+if [ -z "$DATE_STR" ] || [ "$DATE_STR" == "" ]; then
+    echo "Error: DATE_STR is required. Please set it in config.sh or as an environment variable."
+    echo "Example: DATE_STR=20251205_021041"
+    exit 1
+fi
 
 # Extract user@host, port, and identity file from SSH command
 SSH_USER_HOST=""
@@ -57,7 +69,8 @@ echo ""
 LOCAL_DIR="./downloaded_models/$DATE_STR"
 
 # Remote workspace path with date string
-REMOTE_DIR="/workspace/cs259-llm/workspace/$DATE_STR"
+REMOTE_WORK_DIR="${REMOTE_WORK_DIR:-/workspace/cs259-llm}"
+REMOTE_DIR="$REMOTE_WORK_DIR/workspace/$DATE_STR"
 
 # Build commands
 SSH_OPTS="-tt -o LogLevel=ERROR"

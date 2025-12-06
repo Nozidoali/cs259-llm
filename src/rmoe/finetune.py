@@ -33,11 +33,23 @@ def train_expert(
     seed=42,
     qmsum_max_new_tokens=200,
     temperature=0.0,
+    shared_logging_dir=None,
 ):
     logger.info(f"Training expert for dataset: {dataset_name}")
     logger.info(f"Output directory: {output_dir}")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Use shared logging directory if provided, otherwise use expert-specific directory
+    # Shared directory allows all experts to log to the same TensorBoard instance
+    if shared_logging_dir is not None:
+        logging_dir = Path(shared_logging_dir)
+        logging_dir.mkdir(parents=True, exist_ok=True)
+        run_name = f"expert_{dataset_name}"
+    else:
+        # Fallback to expert-specific directory
+        logging_dir = output_dir / "logs"
+        run_name = None
     model, tokenizer = load_model_and_tokenizer(model_path=base_model_path, dtype=torch.float32)
     use_mps = torch.backends.mps.is_available()
     use_cuda = torch.cuda.is_available()
@@ -67,6 +79,9 @@ def train_expert(
             eval_ds = eval_ds.train_test_split(test_size=0.1, seed=seed)
             eval_datasets[ds_name] = eval_ds["test"].select(range(min(50, len(eval_ds["test"]))))
     logger.info(f"Train samples: {len(train_dataset['train'])}, Eval samples: {len(train_dataset['test'])}")
+    logger.info(f"TensorBoard logging directory: {logging_dir}")
+    if run_name:
+        logger.info(f"TensorBoard run name: {run_name} (all experts will appear in the same TensorBoard)")
     training_args = TrainingArguments(
         output_dir=str(output_dir),
         overwrite_output_dir=True,
@@ -76,8 +91,8 @@ def train_expert(
         gradient_accumulation_steps=gradient_accumulation_steps,
         learning_rate=learning_rate,
         weight_decay=weight_decay,
-        logging_dir=str(output_dir / "logs"),
-        logging_steps=1,
+        logging_dir=str(logging_dir),
+        logging_steps=1,  # Log after every step to ensure TensorBoard is updated frequently
         eval_strategy="epoch",
         save_strategy="epoch",
         save_total_limit=2,
@@ -88,6 +103,7 @@ def train_expert(
         bf16=use_mps,
         dataloader_num_workers=0 if use_mps else 2,
         report_to=["tensorboard"],
+        run_name=run_name,  # Distinguish different experts in TensorBoard
         seed=seed,
         gradient_checkpointing=True,
         dataloader_pin_memory=False,
