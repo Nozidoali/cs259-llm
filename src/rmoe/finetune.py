@@ -31,6 +31,7 @@ def train_expert(
     weight_decay=0.01,
     l2_regularization=0.0,
     max_grad_norm=1.0,
+    disable_eval_split=False,
     eval_split=0.2,
     seed=42,
     qmsum_max_new_tokens=200,
@@ -58,18 +59,39 @@ def train_expert(
         logger.info("Gradient checkpointing enabled")
     
     model.train()
-    train_dataset = prepare_dataset(dataset_name, tokenizer, max_length, keep_metadata=True)
-    train_dataset = train_dataset.train_test_split(test_size=eval_split, seed=seed)
-    eval_datasets = {}
-    for ds_name in all_datasets:
-        if ds_name == dataset_name:
-            eval_datasets[ds_name] = train_dataset["test"]
-        else:
-            eval_ds = prepare_dataset(ds_name, tokenizer, max_length, keep_metadata=True)
-            eval_ds = eval_ds.train_test_split(test_size=0.1, seed=seed)
-            eval_datasets[ds_name] = eval_ds["test"].select(range(min(50, len(eval_ds["test"]))))
-    logger.info(f"Train samples: {len(train_dataset['train'])}, Eval samples: {len(train_dataset['test'])}")
+    full_dataset = prepare_dataset(dataset_name, tokenizer, max_length, keep_metadata=True)
+    
+    # Option to disable eval split for overfitting experts on full dataset
+    if disable_eval_split:
+        logger.info(f"Eval split disabled - training on full dataset to overfit expert")
+        logger.info(f"Will evaluate on training set itself to select best checkpoint based on BLEURT score")
+        train_dataset_split = full_dataset
+        eval_dataset_split = full_dataset  # Evaluate on training set itself
+        eval_datasets = {dataset_name: full_dataset}  # Use training set for evaluation
+        logger.info(f"Train samples: {len(full_dataset)} (full dataset, no eval split)")
+        logger.info(f"Eval samples: {len(full_dataset)} (same as training set)")
+    else:
+        train_dataset = full_dataset.train_test_split(test_size=eval_split, seed=seed)
+        train_dataset_split = train_dataset["train"]
+        eval_dataset_split = train_dataset["test"]
+        eval_datasets = {}
+        for ds_name in all_datasets:
+            if ds_name == dataset_name:
+                eval_datasets[ds_name] = train_dataset["test"]
+            else:
+                eval_ds = prepare_dataset(ds_name, tokenizer, max_length, keep_metadata=True)
+                eval_ds = eval_ds.train_test_split(test_size=0.1, seed=seed)
+                eval_datasets[ds_name] = eval_ds["test"].select(range(min(50, len(eval_ds["test"]))))
+        logger.info(f"Train samples: {len(train_dataset['train'])}, Eval samples: {len(train_dataset['test'])}")
     logger.info(f"Training for {num_epochs} epochs with learning_rate={learning_rate}, l2_regularization={l2_regularization}, max_grad_norm={max_grad_norm}")
+    logger.info(f"Eval split {'disabled (overfitting mode - evaluating on training set)' if disable_eval_split else f'enabled ({eval_split*100}% held out)'}")
+    
+    # Always enable evaluation and best model selection based on BLEURT score
+    eval_strategy = "epoch"
+    save_strategy = "epoch"
+    load_best_model_at_end = True
+    metric_for_best_model = "eval_truthfulqa_bleurt_max_score" if dataset_name == "truthfulqa" else "eval_longbench_rougeL"
+    
     training_args = TrainingArguments(
         output_dir=str(output_dir),
         overwrite_output_dir=True,
@@ -82,12 +104,12 @@ def train_expert(
         max_grad_norm=max_grad_norm,  # Gradient clipping to prevent exploding gradients
         logging_dir=str(output_dir / "logs"),
         logging_steps=1,
-        eval_strategy="epoch",
-        save_strategy="epoch",
+        eval_strategy=eval_strategy,
+        save_strategy=save_strategy,
         save_total_limit=2,
-        load_best_model_at_end=True,
-        metric_for_best_model="eval_truthfulqa_bleurt_max_score" if dataset_name == "truthfulqa" else "eval_longbench_rougeL",
-        greater_is_better=True,
+        load_best_model_at_end=load_best_model_at_end,
+        metric_for_best_model=metric_for_best_model,
+        greater_is_better=True if metric_for_best_model else None,
         fp16=use_cuda,
         bf16=use_mps,
         dataloader_num_workers=0 if use_mps else 2,
@@ -100,8 +122,8 @@ def train_expert(
     trainer = MultiDatasetEvalTrainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset["train"],
-        eval_dataset=train_dataset["test"],
+        train_dataset=train_dataset_split,
+        eval_dataset=eval_dataset_split,
         eval_datasets=eval_datasets,
         data_collator=data_collator,
         tokenizer=tokenizer,

@@ -99,6 +99,7 @@ def main():
                     weight_decay=expert_config.get("weight_decay", 0.01),
                     l2_regularization=expert_config.get("l2_regularization", 0.0),
                     max_grad_norm=expert_config.get("max_grad_norm", 1.0),
+                    disable_eval_split=expert_config.get("disable_eval_split", False),
                     eval_split=expert_config.get("eval_split", 0.2),
                     seed=config.get("seed", 42),
                     qmsum_max_new_tokens=expert_config.get("qmsum_max_new_tokens", 200),

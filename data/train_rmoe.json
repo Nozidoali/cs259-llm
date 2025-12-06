@@ -8,13 +8,14 @@
     "seed": 42,
     "expert_training": {
         "max_length": 512,
-        "num_epochs": 100,
+        "num_epochs": 20,
         "batch_size": 1,
         "gradient_accumulation_steps": 4,
         "learning_rate": 1e-5,
         "weight_decay": 0.01,
         "l2_regularization": 1e-4,
         "max_grad_norm": 1.0,
+        "disable_eval_split": true,
         "eval_split": 0.2,
         "qmsum_max_new_tokens": 200,
         "temperature": 0.5
