@@ -58,8 +58,8 @@ def get_truthfulqa_score(script_path="./scripts/run-cli.sh", num_samples=100, nu
         cmd = ["bash", script_path, "-no-cnv", "-p", f"'{question_clean}'", "-n", str(num_tokens)] + extra_args
         logger.debug(f"Running command for sample {i}: {' '.join(cmd)}")
         proc = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
-        if proc.stdout:
-            logger.debug(f"Sample {i} stdout:\n{proc.stdout}")
+        
+        # Only log stderr for debugging, don't print stdout
         if proc.stderr:
             logger.debug(f"Sample {i} stderr:\n{proc.stderr}")
         if proc.returncode != 0:
@@ -73,6 +73,16 @@ def get_truthfulqa_score(script_path="./scripts/run-cli.sh", num_samples=100, nu
             all_predictions.append(pred)
             all_correct_refs.append(correct_answers)
             all_incorrect_refs.append(incorrect_answers)
+            
+            # Print question and response in training format
+            if i < 5 or (i + 1) % 20 == 0:
+                logger.info(f"\n{'='*80}")
+                logger.info(f"Example {i + 1}/{n}")
+                logger.info(f"Input Prompt: {prompt}")
+                logger.info(f"Generated Answer: {pred}")
+                logger.info(f"Correct Answers (sample): {correct_answers[0] if correct_answers else 'N/A'}")
+                logger.info(f"Incorrect Answers (sample): {incorrect_answers[0] if incorrect_answers else 'N/A'}")
+                logger.info(f"{'='*80}\n")
         
         if (i + 1) % 10 == 0:
             logger.info(f"Progress: {i+1}/{n} predictions generated")
@@ -146,8 +156,8 @@ def run_longbench_one(cli_path: str, prompt_device_path: str, output_path: str, 
     with open(output_path, "w", encoding="utf-8", errors="replace") as fout:
         if proc.stdout:
             fout.write(proc.stdout)
-    if proc.stdout:
-        logger.debug(f"Output for {prompt_device_path} stdout:\n{proc.stdout}")
+    
+    # Only log stderr for debugging, don't print stdout
     if proc.stderr:
         logger.debug(f"Output for {prompt_device_path} stderr:\n{proc.stderr}")
     end = time.time()
@@ -280,10 +290,9 @@ def get_throughput(script_path="./scripts/run-bench.sh", model=None, config=None
             env["M"] = model
         logger.debug(f"Running command: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env)
-        if result.stdout:
-            logger.info(f"Benchmark stdout:\n{result.stdout}")
+        # Only log for debugging, don't print full output
         if result.stderr:
-            logger.info(f"Benchmark stderr:\n{result.stderr}")
+            logger.debug(f"Benchmark stderr:\n{result.stderr}")
         combined_output = result.stdout
         if result.stderr:
             combined_output += "\n" + result.stderr

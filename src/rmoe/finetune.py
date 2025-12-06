@@ -110,7 +110,7 @@ def train_expert(
         weight_decay=weight_decay,
         max_grad_norm=max_grad_norm,  # Gradient clipping to prevent exploding gradients
         logging_dir=str(output_dir / "logs"),
-        logging_steps=1,
+        logging_steps=gradient_accumulation_steps,  # Only log after optimizer step to avoid loss spikes
         eval_strategy=eval_strategy,
         save_strategy=save_strategy,
         save_total_limit=2,

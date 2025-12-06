@@ -5,12 +5,12 @@
 
 # SSH connection command
 # Format: ssh user@host [-p PORT] [-i ~/.ssh/key]
-SSH_CMD="${SSH_CMD:-ssh root@69.19.136.225 -p 21871 -i ~/.ssh/id_ed25519}"
+SSH_CMD="${SSH_CMD:-ssh root@69.19.136.225 -p 21109 -i ~/.ssh/id_ed25519}"
 
 # Date string for workspace directory (YYYYMMDD_HHMMSS format)
 # Leave empty to auto-detect the latest workspace
 # Example: "20251205_021041"
-DATE_STR="${DATE_STR:-20251205_221142}"
+DATE_STR="${DATE_STR:-20251206_081921}"
 
 # Workspace timestamp (YYYYMMDD_HHMMSS format)
 # Used to coordinate between TensorBoard and Python training

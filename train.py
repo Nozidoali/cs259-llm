@@ -203,17 +203,18 @@ def main():
                 logger.info(f"Train samples: {len(combined_dataset['train'])}, Eval samples: {len(combined_dataset['test'])}")
                 output_dir = work_dir / "rmoe_model_finetuned"
                 output_dir.mkdir(parents=True, exist_ok=True)
+                grad_accum_steps = finetune_config.get("gradient_accumulation_steps", 4)
                 training_args = TrainingArguments(
                     output_dir=str(output_dir),
                     overwrite_output_dir=True,
                     num_train_epochs=finetune_config.get("num_epochs", 3),
                     per_device_train_batch_size=finetune_config.get("batch_size", 1),
                     per_device_eval_batch_size=finetune_config.get("batch_size", 1),
-                    gradient_accumulation_steps=finetune_config.get("gradient_accumulation_steps", 4),
+                    gradient_accumulation_steps=grad_accum_steps,
                     learning_rate=finetune_config.get("learning_rate", 5e-5),
                     weight_decay=finetune_config.get("weight_decay", 0.01),
                     logging_dir=str(output_dir / "logs"),
-                    logging_steps=1,
+                    logging_steps=grad_accum_steps,  # Only log after optimizer step to avoid loss spikes
                     eval_strategy="epoch",
                     save_strategy="epoch",
                     save_total_limit=2,
