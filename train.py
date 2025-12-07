@@ -21,7 +21,7 @@ from models import load_model_and_tokenizer, freeze_all_except_mlp
 from data import prepare_truthfulqa_dataset, prepare_qmsum_dataset, download_model
 from conversion import convert_to_gguf, merge_experts_to_standard_mlp
 from rmoe.finetune import train_expert
-from rmoe.gating import train_gating_network
+from rmoe.gating import train_gating_network, train_shared_expert_gating
 from rmoe.merge import merge_experts
 
 logging.basicConfig(
@@ -32,13 +32,37 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def main():
-    parser = argparse.ArgumentParser(description="RMoE training pipeline")
+    parser = argparse.ArgumentParser(
+        description="RMoE training pipeline",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Conversion modes:
+  preserve_moe - Keep all experts with routing (NEW, recommended)
+  average      - Average experts into single model (OLD, simpler)
+
+Examples:
+  # Full pipeline with MoE preservation
+  python train.py config.json --conversion-mode preserve_moe
+  
+  # Full pipeline with expert averaging (original behavior)
+  python train.py config.json --conversion-mode average
+  
+  # Skip training, only convert existing model
+  python train.py config.json --skip-experts --skip-gating --conversion-mode preserve_moe
+        """
+    )
     parser.add_argument("config", help="Path to JSON config file")
     parser.add_argument("--skip-experts", action="store_true", help="Skip expert training")
     parser.add_argument("--skip-gating", action="store_true", help="Skip gating network training")
     parser.add_argument("--skip-merge", action="store_true", help="Skip model merging")
     parser.add_argument("--skip-finetune", action="store_true", help="Skip full finetuning")
     parser.add_argument("--skip-convert", action="store_true", help="Skip GGUF conversion")
+    parser.add_argument(
+        "--conversion-mode",
+        choices=["preserve_moe", "average"],
+        default="average",
+        help="Conversion mode: 'preserve_moe' (keep all experts) or 'average' (average experts). Default: average (backward compatible)"
+    )
     args = parser.parse_args()
     if not os.path.exists(args.config):
         logger.error(f"Config file not found: {args.config}")
@@ -145,6 +169,35 @@ def main():
             else:
                 logger.info("Skipping gating network training (--skip-gating flag)")
             gating_path = gating_output_dir
+        
+        merge_config = config.get("merge", {})
+        if merge_config.get("use_shared_expert", False):
+            shared_gating_exists = gating_output_dir.exists() and (gating_output_dir / "shared_expert_gating.pt").exists()
+            
+            if not args.skip_gating and not shared_gating_exists:
+                logger.info(f"=" * 60)
+                logger.info("Training shared expert gating network")
+                logger.info(f"=" * 60)
+                train_shared_expert_gating(
+                    base_model=base_model_path,
+                    datasets=datasets,
+                    output_dir=gating_output_dir,
+                    learning_rate=gating_config.get("learning_rate", 1e-4),
+                    batch_size=gating_config.get("batch_size", 32),
+                    num_epochs=gating_config.get("num_epochs", 10),
+                    weight_decay=gating_config.get("weight_decay", 0.01),
+                    train_split=gating_config.get("train_split", 0.7),
+                    val_split=gating_config.get("val_split", 0.15),
+                    test_split=gating_config.get("test_split", 0.15),
+                    seed=config.get("seed", 42),
+                    prompt_dir=config.get("prompt_dir"),
+                )
+            else:
+                if shared_gating_exists:
+                    logger.info("Shared expert gating network already exists, skipping shared expert gating training")
+                else:
+                    logger.info("Skipping shared expert gating network training (--skip-gating flag)")
+        
         if not args.skip_merge:
             logger.info(f"=" * 60)
             logger.info("Merging expert models into MoE")
@@ -157,6 +210,9 @@ def main():
                 output_dir=rmoe_output_dir,
                 base_model_path=base_model_path,
                 routing_mode=merge_config.get("routing_mode", "weighted_sum"),
+                target_architecture=merge_config.get("target_architecture", "auto"),
+                use_shared_expert=merge_config.get("use_shared_expert", False),
+                shared_expert_path=merge_config.get("shared_expert_path"),
             )
             rmoe_path = rmoe_output_dir
             logger.info(f"MoE model (rmoe_model) created at: {rmoe_path}")
@@ -253,25 +309,73 @@ def main():
             logger.info(f"=" * 60)
             logger.info("Converting to GGUF")
             logger.info(f"=" * 60)
-            if config.get("gguf_output"):
-                output_file = Path(config["gguf_output"])
-            else:
-                quantize = config.get("quantize", QUANTIZE_LEVEL)
-                output_file = work_dir / f"rmoe_model_{quantize}.gguf"
-            output_file.parent.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Conversion mode: {args.conversion_mode}")
             quantize_level = config.get("quantize", QUANTIZE_LEVEL)
-            logger.info(f"Converting: {final_model_path}")
-            logger.info(f"Output: {output_file}")
-            logger.info(f"Quantization: {quantize_level}")
-            standard_model_path = work_dir / "rmoe_standard"
-            merge_experts_to_standard_mlp(Path(final_model_path), standard_model_path, merge_mode="average")
-            convert_to_gguf(standard_model_path, output_file, quantize_level)
-            logger.info(f"GGUF file saved to: {output_file}")
+            if args.conversion_mode == "preserve_moe":
+                logger.info("Using PRESERVE_MOE mode - keeping all experts!")
+                from rmoe.moemodel import MoEModel
+                logger.info("Loading MoE model...")
+                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                merge_cfg = config.get("merge", {})
+                moe_model = MoEModel(
+                    expert_paths=[str(p) for p in expert_paths],
+                    gating_model_path=str(gating_path),
+                    base_model_path=base_model_path,
+                    routing_mode=merge_cfg.get("routing_mode", "weighted_sum"),
+                    device=device,
+                    target_architecture=merge_cfg.get("target_architecture", "auto"),
+                    use_shared_expert=merge_cfg.get("use_shared_expert", False),
+                    shared_expert_path=merge_cfg.get("shared_expert_path"),
+                )
+                qwen3_format_dir = work_dir / "rmoe_qwen3_format"
+                arch_name = moe_model.target_architecture.upper()
+                logger.info(f"Saving in {arch_name} format: {qwen3_format_dir}")
+                moe_model.save_pretrained(qwen3_format_dir)
+                if config.get("gguf_output"):
+                    output_file = Path(config["gguf_output"])
+                else:
+                    quantize_map = {"Q4_0": "f16", "Q8_0": "q8_0"}
+                    outtype = quantize_map.get(quantize_level, quantize_level)
+                    output_file = work_dir / f"rmoe_model_moe_{outtype}.gguf"
+                output_file.parent.mkdir(parents=True, exist_ok=True)
+                logger.info(f"Converting: {qwen3_format_dir}")
+                logger.info(f"Output: {output_file}")
+                logger.info(f"Quantization: {quantize_level}")
+                convert_to_gguf(qwen3_format_dir, output_file, quantize_level)
+                logger.info(f"✓ MoE-preserved GGUF saved to: {output_file}")
+                logger.info(f"✓ All {len(expert_paths)} experts preserved with routing!")
+                
+            else:
+                logger.info("Using AVERAGE mode - merging all experts to standard MLP")
+                if config.get("gguf_output"):
+                    output_file = Path(config["gguf_output"])
+                else:
+                    quantize = config.get("quantize", QUANTIZE_LEVEL)
+                    output_file = work_dir / f"rmoe_model_{quantize}.gguf"
+                output_file.parent.mkdir(parents=True, exist_ok=True)
+                logger.info(f"Converting: {final_model_path}")
+                logger.info(f"Output: {output_file}")
+                logger.info(f"Quantization: {quantize_level}")
+                standard_model_path = work_dir / "rmoe_standard"
+                logger.info(f"Merging experts to standard MLP: {standard_model_path}")
+                merge_experts_to_standard_mlp(Path(final_model_path), standard_model_path, merge_mode="average")
+                convert_to_gguf(standard_model_path, output_file, quantize_level)
+                logger.info(f"✓ Standard GGUF saved to: {output_file}")
         else:
             logger.info("Skipping GGUF conversion")
         logger.info("=" * 60)
-        logger.info("Pipeline complete!")
+        logger.info("PIPELINE COMPLETE!")
+        logger.info("=" * 60)
         logger.info(f"Work directory: {work_dir}")
+        if not args.skip_convert:
+            logger.info(f"Conversion mode: {args.conversion_mode}")
+            if args.conversion_mode == "preserve_moe":
+                logger.info(f"  ✓ MoE structure preserved ({len(expert_paths)} experts with routing)")
+                arch_display = config.get("merge", {}).get("target_architecture", "auto").upper()
+                logger.info(f"  {arch_display} format: {work_dir / 'rmoe_qwen3_format'}")
+            else:
+                logger.info(f"  ✓ Experts averaged into single model")
+                logger.info(f"  Standard format: {work_dir / 'rmoe_standard'}")
         logger.info("=" * 60)
     except Exception as e:
         logger.error(f"Pipeline failed: {e}", exc_info=True)

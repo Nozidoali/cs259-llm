@@ -6,8 +6,8 @@ import logging
 from pathlib import Path
 from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-from gating.gatingmodel import GatingNetwork
-from gating.gatingdataset import prepare_gating_dataset_multi
+from gating.gatingmodel import GatingNetwork, SharedExpertGating
+from gating.gatingdataset import prepare_gating_dataset_multi, prepare_shared_expert_gating_dataset
 
 logger = logging.getLogger(__name__)
 
@@ -136,14 +136,17 @@ def train_gating_network(
             is_best = True
         if is_best:
             best_epoch = epoch + 1
-            torch.save(model.state_dict(), output_dir / "best_model.pt")
+            torch.save(model.state_dict(), output_dir / "expert_router_best.pt")
             logger.info(f"  Saved best model (F1: {val_metrics['f1']:.4f}, Loss: {val_metrics['loss']:.4f})")
     logger.info(f"Training complete! Best validation F1: {best_val_f1:.4f} (epoch {best_epoch})")
     logger.info("Evaluating on test set...")
-    model.load_state_dict(torch.load(output_dir / "best_model.pt", weights_only=True))
+    model.load_state_dict(torch.load(output_dir / "expert_router_best.pt", weights_only=True))
     test_metrics = evaluate(model, test_loader, criterion, device)
     logger.info(f"Test - Loss: {test_metrics['loss']:.4f}, Acc: {test_metrics['accuracy']:.4f}, F1: {test_metrics['f1']:.4f}")
-    torch.save(model.state_dict(), output_dir / "final_model.pt")
+    torch.save(model.state_dict(), output_dir / "expert_router_final.pt")
+
+    model.save_pretrained(output_dir)
+    
     training_info = {
         "base_model": base_model,
         "embedding_dim": embedding_dim,
@@ -165,5 +168,190 @@ def train_gating_network(
     with open(output_dir / "training_info.json", "w") as f:
         json.dump(training_info, f, indent=2)
     logger.info(f"Model saved to: {output_dir}")
+    return output_dir
+
+
+def collate_fn_binary(batch):
+    """Collate function for binary classification (shared expert gating)"""
+    embeddings = torch.tensor([item["embedding"] for item in batch], dtype=torch.float32)
+    labels = torch.tensor([item["label"] for item in batch], dtype=torch.float32)
+    return {"embedding": embeddings, "label": labels}
+
+
+def train_epoch_binary(model, dataloader, criterion, optimizer, device):
+    """Train epoch for binary classification"""
+    model.train()
+    total_loss = 0.0
+    all_preds = []
+    all_labels = []
+    
+    for batch in dataloader:
+        embeddings = batch["embedding"].to(device)
+        labels = batch["label"].to(device).unsqueeze(1)  # Shape: (batch_size, 1)
+        
+        optimizer.zero_grad()
+        logits = model.get_logits(embeddings)
+        loss = criterion(logits, labels)
+        loss.backward()
+        optimizer.step()
+        
+        total_loss += loss.item()
+        probs = model(embeddings)
+        preds = (probs > 0.5).float()
+        all_preds.extend(preds.cpu().numpy().flatten())
+        all_labels.extend(labels.cpu().numpy().flatten())
+    
+    avg_loss = total_loss / len(dataloader)
+    accuracy = accuracy_score(all_labels, all_preds)
+    f1 = f1_score(all_labels, all_preds, average='binary', zero_division=0)
+    
+    return avg_loss, accuracy, f1
+
+
+def evaluate_binary(model, dataloader, criterion, device):
+    """Evaluate binary classification model"""
+    model.eval()
+    total_loss = 0.0
+    all_preds = []
+    all_labels = []
+    
+    with torch.no_grad():
+        for batch in dataloader:
+            embeddings = batch["embedding"].to(device)
+            labels = batch["label"].to(device).unsqueeze(1)
+            
+            logits = model.get_logits(embeddings)
+            loss = criterion(logits, labels)
+            total_loss += loss.item()
+            
+            probs = model(embeddings)
+            preds = (probs > 0.5).float()
+            all_preds.extend(preds.cpu().numpy().flatten())
+            all_labels.extend(labels.cpu().numpy().flatten())
+    
+    avg_loss = total_loss / len(dataloader)
+    
+    return {
+        "loss": avg_loss,
+        "accuracy": accuracy_score(all_labels, all_preds),
+        "f1": f1_score(all_labels, all_preds, average='binary', zero_division=0),
+        "precision": precision_score(all_labels, all_preds, average='binary', zero_division=0),
+        "recall": recall_score(all_labels, all_preds, average='binary', zero_division=0),
+    }
+
+
+def train_shared_expert_gating(
+    base_model,
+    datasets,
+    output_dir,
+    learning_rate=1e-4,
+    batch_size=32,
+    num_epochs=10,
+    weight_decay=0.01,
+    train_split=0.7,
+    val_split=0.15,
+    test_split=0.15,
+    seed=42,
+    prompt_dir=None,
+):
+    """
+    Train shared expert gating network (binary classification).
+    Decides whether to use the shared expert for each input.
+    """
+    logger.info("Training shared expert gating network (binary classification)")
+    logger.info(f"Output directory: {output_dir}")
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+    logger.info(f"Using device: {device}")
+    
+    logger.info("Preparing shared expert gating dataset...")
+    dataset = prepare_shared_expert_gating_dataset(
+        base_model=base_model,
+        datasets=datasets,
+        train_split=train_split,
+        val_split=val_split,
+        test_split=test_split,
+        seed=seed,
+        prompt_dir=prompt_dir,
+    )
+    
+    embedding_dim = len(dataset["train"][0]["embedding"])
+    logger.info(f"Embedding dimension: {embedding_dim}")
+    
+    train_loader = DataLoader(dataset["train"], batch_size=batch_size, shuffle=True, collate_fn=collate_fn_binary)
+    val_loader = DataLoader(dataset["validation"], batch_size=batch_size, shuffle=False, collate_fn=collate_fn_binary)
+    test_loader = DataLoader(dataset["test"], batch_size=batch_size, shuffle=False, collate_fn=collate_fn_binary)
+    
+    logger.info("Initializing shared expert gating network...")
+    model = SharedExpertGating(input_dim=embedding_dim).to(device)
+    
+    total_params = sum(p.numel() for p in model.parameters())
+    logger.info(f"Total parameters: {total_params:,}")
+    
+    # Use BCEWithLogitsLoss for binary classification
+    criterion = nn.BCEWithLogitsLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    
+    logger.info(f"Training configuration: Epochs={num_epochs}, Batch size={batch_size}, LR={learning_rate}")
+    logger.info("Starting training...")
+    
+    best_val_f1 = -1.0
+    best_val_loss = float('inf')
+    best_epoch = -1
+    
+    for epoch in range(num_epochs):
+        logger.info(f"Epoch {epoch + 1}/{num_epochs}")
+        train_loss, train_acc, train_f1 = train_epoch_binary(model, train_loader, criterion, optimizer, device)
+        logger.info(f"  Train - Loss: {train_loss:.4f}, Acc: {train_acc:.4f}, F1: {train_f1:.4f}")
+        
+        val_metrics = evaluate_binary(model, val_loader, criterion, device)
+        logger.info(f"  Val   - Loss: {val_metrics['loss']:.4f}, Acc: {val_metrics['accuracy']:.4f}, F1: {val_metrics['f1']:.4f}")
+        
+        is_best = False
+        if val_metrics["f1"] > best_val_f1:
+            best_val_f1 = val_metrics["f1"]
+            is_best = True
+        elif val_metrics["f1"] == best_val_f1 == 0.0 and val_metrics["loss"] < best_val_loss:
+            best_val_loss = val_metrics["loss"]
+            is_best = True
+        
+        if is_best:
+            best_epoch = epoch + 1
+            torch.save(model.state_dict(), output_dir / "shared_expert_gating_best.pt")
+            logger.info(f"  Saved best model (F1: {val_metrics['f1']:.4f}, Loss: {val_metrics['loss']:.4f})")
+    
+    logger.info(f"Training complete! Best validation F1: {best_val_f1:.4f} (epoch {best_epoch})")
+    logger.info("Evaluating on test set...")
+    
+    model.load_state_dict(torch.load(output_dir / "shared_expert_gating_best.pt", weights_only=True))
+    test_metrics = evaluate_binary(model, test_loader, criterion, device)
+    logger.info(f"Test - Loss: {test_metrics['loss']:.4f}, Acc: {test_metrics['accuracy']:.4f}, F1: {test_metrics['f1']:.4f}")
+    
+    # Save with the standard naming
+    model.save_pretrained(output_dir)
+    
+    training_info = {
+        "base_model": base_model,
+        "embedding_dim": embedding_dim,
+        "model_type": "shared_expert_gating",
+        "datasets": datasets,
+        "config": {
+            "learning_rate": learning_rate,
+            "batch_size": batch_size,
+            "num_epochs": num_epochs,
+            "weight_decay": weight_decay,
+        },
+        "best_epoch": best_epoch,
+        "best_val_f1": best_val_f1,
+        "test_metrics": test_metrics,
+        "total_parameters": total_params,
+    }
+    
+    with open(output_dir / "shared_gating_training_info.json", "w") as f:
+        json.dump(training_info, f, indent=2)
+    
+    logger.info(f"Shared expert gating model saved to: {output_dir}")
     return output_dir
 

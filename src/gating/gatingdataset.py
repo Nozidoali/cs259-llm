@@ -154,3 +154,77 @@ def prepare_gating_dataset_multi(
     dataset_dict.save_to_disk(str(cache_dir))
     return dataset_dict
 
+
+def prepare_shared_expert_gating_dataset(
+    base_model: str,
+    datasets: List[str],
+    max_length: int = 512,
+    train_split: float = 0.7,
+    val_split: float = 0.15,
+    test_split: float = 0.15,
+    batch_size: int = 8,
+    cache_dir: Optional[Path] = None,
+    prompt_dir: Optional[Path] = None,
+    seed: int = 42,
+):
+    if abs(train_split + val_split + test_split - 1.0) > 1e-6:
+        raise ValueError("train_split + val_split + test_split must equal 1.0")
+    
+    if cache_dir is None:
+        model_name = base_model.replace("/", "_").replace("-", "_")
+        cache_key = "_".join(sorted(datasets))
+        cache_dir = DATA_DIR / "gating_cache" / f"{model_name}_{cache_key}_shared"
+    else:
+        cache_dir = Path(cache_dir)
+    
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_file = cache_dir / "shared_gating_dataset.arrow"
+    
+    if cache_file.exists():
+        logger.info(f"Loading cached shared expert gating dataset from: {cache_dir}")
+        try:
+            return DatasetDict.load_from_disk(str(cache_dir))
+        except Exception as e:
+            logger.warning(f"Failed to load cache: {e}, regenerating...")
+    
+    logger.info("Preparing shared expert gating dataset from scratch...")
+    model, tokenizer, embedding_dim = load_base_model_for_embeddings(base_model)
+    
+    all_texts = []
+    all_labels = []
+    
+    for dataset_name in datasets:
+        texts = load_dataset_texts(dataset_name, prompt_dir)
+        all_texts.extend(texts)
+        all_labels.extend([1.0] * len(texts))
+        logger.info(f"Dataset {dataset_name}: {len(texts)} samples (label=1.0 - use shared expert)")
+    
+    logger.info(f"Total samples: {len(all_texts)} for shared expert gating")
+    logger.info("Extracting embeddings...")
+    device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+    embeddings = extract_embeddings(model, tokenizer, all_texts, max_length=max_length, batch_size=batch_size, device=device)
+    logger.info(f"Extracted embeddings shape: {embeddings.shape}")
+    
+    dataset = Dataset.from_dict({
+        "embedding": embeddings.tolist(),
+        "label": all_labels,  # Float labels for binary classification
+        "text": all_texts,
+    })
+    
+    dataset = dataset.train_test_split(test_size=test_split, seed=seed)
+    test_dataset = dataset["test"]
+    train_val_split = val_split / (train_split + val_split)
+    train_dataset = dataset["train"].train_test_split(test_size=train_val_split, seed=seed)
+    
+    dataset_dict = DatasetDict({
+        "train": train_dataset["train"],
+        "validation": train_dataset["test"],
+        "test": test_dataset,
+    })
+    
+    logger.info(f"Shared expert gating dataset splits - Train: {len(dataset_dict['train'])}, Validation: {len(dataset_dict['validation'])}, Test: {len(dataset_dict['test'])}")
+    logger.info(f"Saving shared expert gating dataset to cache: {cache_dir}")
+    dataset_dict.save_to_disk(str(cache_dir))
+    
+    return dataset_dict
+

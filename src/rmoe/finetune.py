@@ -86,7 +86,7 @@ def train_expert(
     eval_strategy = "epoch"
     save_strategy = "epoch"
     load_best_model_at_end = True
-    metric_for_best_model = "eval_truthfulqa_bleurt_max_score" if dataset_name == "truthfulqa" else "eval_longbench_rougeL"
+    metric_for_best_model = "eval_truthfulqa_bleurt_max_score" if dataset_name == "truthfulqa" else "eval_qmsum_rougeL"
     
     training_args = TrainingArguments(
         output_dir=str(output_dir),
