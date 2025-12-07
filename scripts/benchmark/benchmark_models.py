@@ -35,6 +35,13 @@ logger = logging.getLogger(__name__)
 
 # Model definitions with HuggingFace repos and quantization levels
 MODEL_CONFIGS = [
+    {
+        "name": "Qwen3-0.6B",
+        "hf_repo": "Qwen/Qwen3-0.6B",
+        "quantizations": ["f16", "Q8_0", "Q4_K_M"],
+        "param_size": "0.6B",
+        "layers": 28,
+    },
     # Llama 3.2 models (different sizes)
     {
         "name": "llama-3.2-1b",
@@ -147,7 +154,7 @@ MODEL_CONFIGS = [
         "quantizations": ["Q4_K_M", "Q8_0"],
         "param_size": "3B",
         "layers": 32,
-    },
+    }
 ]
 
 
@@ -161,9 +168,10 @@ class ModelBenchmarker:
         self.device_path = args.device_path
         self.adb_serial = args.adb_serial
         
-        # Scripts
-        self.push_script = self.script_dir / "scripts" / "push-model.sh"
-        self.bench_script = self.script_dir / "scripts" / "run-bench.sh"
+        # Scripts (in parent scripts directory)
+        scripts_dir = self.script_dir.parent
+        self.push_script = scripts_dir / "push-model.sh"
+        self.bench_script = scripts_dir / "run-bench.sh"
         
         # Validate scripts exist
         if not self.push_script.exists():
@@ -465,10 +473,14 @@ class ModelBenchmarker:
         elif "mistral" in name:
             # bartowski uses: Mistral-7B-Instruct-v0.3-Q4_K_M.gguf
             return f"Mistral-7B-Instruct-v0.3-{quant}.gguf"
-        elif "qwen" in name:
-            # Qwen uses: qwen2.5-0.5b-instruct-q4_k_m.gguf
-            size = model_config["param_size"].lower()
-            return f"qwen2.5-{size}-instruct-{quant.lower()}.gguf"
+        elif "qwen" in name.lower():
+            # Qwen2.5 uses: qwen2.5-0.5b-instruct-q4_k_m.gguf
+            # Qwen3 uses: Qwen3-0.6B-Q4_K_M.gguf (converted locally)
+            if "qwen3" in name.lower():
+                return f"Qwen3-0.6B-{quant}.gguf"
+            else:
+                size = model_config["param_size"].lower()
+                return f"qwen2.5-{size}-instruct-{quant.lower()}.gguf"
         elif "phi-3.5" in name:
             return f"Phi-3.5-mini-instruct-{quant}.gguf"
         elif "phi-2" in name:

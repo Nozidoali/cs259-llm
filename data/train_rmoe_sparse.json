@@ -3,10 +3,6 @@
     "base_model": "qwen2-0.5b",
     "datasets": [
         "truthfulqa",
-        "truthfulqa",
-        "truthfulqa",
-        "longbench",
-        "longbench",
         "longbench"
     ],
     "seed": 42,
@@ -39,10 +35,11 @@
         "test_split": 0.15
     },
     "merge": {
-        "routing_mode": "weighted_sum"
+        "routing_mode": "sparse_top1",
+        "router_trainable": true
     },
     "full_finetune": {
-        "enabled": true,
+        "enabled": false,
         "max_length": 512,
         "num_epochs": 100,
         "batch_size": 2,
@@ -54,3 +51,10 @@
     "quantize": "q8_0",
     "gguf_output": null
 }
+
+
+
+
+
+
+

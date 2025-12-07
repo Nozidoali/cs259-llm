@@ -20,7 +20,7 @@ from gating.gatingdataset import load_base_model_for_embeddings
 logger = logging.getLogger(__name__)
 
 class MoEFFN(nn.Module):
-    def __init__(self, expert_mlps: List, parent_model, routing_mode: Literal["weighted_sum", "select_one"] = "weighted_sum"):
+    def __init__(self, expert_mlps: List, parent_model, routing_mode: Literal["weighted_sum", "select_one", "sparse_top1"] = "sparse_top1"):
         super().__init__()
         self.expert_mlps = nn.ModuleList(expert_mlps)
         object.__setattr__(self, 'parent_model', parent_model)
@@ -34,9 +34,9 @@ class MoEFFN(nn.Module):
         
         destination._metadata[prefix[:-1]] = {}
         
-        for name, module in self.named_children():
-            if name == 'expert_mlps':  # Only include expert_mlps
-                module.state_dict(destination, prefix + name + '.', keep_vars=keep_vars)
+        # Save experts with new naming convention for GGUF compatibility
+        for idx, expert_mlp in enumerate(self.expert_mlps):
+            expert_mlp.state_dict(destination, prefix + f'experts.{idx}.', keep_vars=keep_vars)
         
         # Include parameters and buffers
         for name, param in self.named_parameters(recurse=False):
@@ -56,6 +56,26 @@ class MoEFFN(nn.Module):
         else:
             logger.warning("_current_gating_probs not set, using equal probabilities")
             gating_probs = torch.ones(batch_size, self.num_experts, device=hidden_states.device, dtype=hidden_states.dtype) / self.num_experts
+        
+        # Sparse top-1 routing: only execute selected expert
+        if self.routing_mode == "sparse_top1":
+            # Hard top-1 selection
+            selected_expert_idx = gating_probs.argmax(dim=-1)  # [batch_size]
+            
+            # Initialize output tensor
+            output = torch.zeros_like(hidden_states)
+            
+            # Execute only selected expert for each batch element (sparse execution)
+            for batch_idx in range(batch_size):
+                expert_idx = selected_expert_idx[batch_idx].item()
+                expert_out = self.expert_mlps[expert_idx](hidden_states[batch_idx:batch_idx+1])
+                # Handle both tensor and tuple returns
+                if isinstance(expert_out, tuple):
+                    expert_out = expert_out[0]
+                output[batch_idx] = expert_out[0]
+            return output
+        
+        # Legacy modes for backward compatibility
         expert_outputs = [expert_mlp(hidden_states) for expert_mlp in self.expert_mlps]
         if self.routing_mode == "weighted_sum":
             output = torch.zeros_like(expert_outputs[0])
@@ -63,7 +83,7 @@ class MoEFFN(nn.Module):
                 prob = gating_probs[:, idx].unsqueeze(-1).unsqueeze(-1)
                 output += prob * expert_out
             return output
-        else:
+        else:  # select_one
             selected_expert = gating_probs.argmax(dim=-1)
             output = torch.zeros_like(expert_outputs[0])
             for idx, expert_out in enumerate(expert_outputs):
@@ -72,12 +92,13 @@ class MoEFFN(nn.Module):
             return output
 
 class MoEModel(nn.Module):
-    def __init__(self, expert_paths: List[Union[str, Path]], gating_model_path: Union[str, Path], base_model_path: Optional[Union[str, Path]] = None, routing_mode: Literal["weighted_sum", "select_one"] = "weighted_sum", device=None):
+    def __init__(self, expert_paths: List[Union[str, Path]], gating_model_path: Union[str, Path], base_model_path: Optional[Union[str, Path]] = None, routing_mode: Literal["weighted_sum", "select_one", "sparse_top1"] = "sparse_top1", device=None, router_trainable: bool = True):
         super().__init__()
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
         self.device = device
         self.routing_mode = routing_mode
+        self.router_trainable = router_trainable
         expert_paths = [Path(p) for p in expert_paths]
         gating_model_path = Path(gating_model_path)
         if base_model_path is None:
@@ -121,9 +142,21 @@ class MoEModel(nn.Module):
         gating_network = gating_network.to(self.device)
         
         self.gating_network = gating_network
-        self.gating_network.eval()
+        # Make router trainable if specified
+        if not self.router_trainable:
+            self.gating_network.eval()
+            for param in self.gating_network.parameters():
+                param.requires_grad = False
+        else:
+            self.gating_network.train()
+            for param in self.gating_network.parameters():
+                param.requires_grad = True
+        
         self.embedding_model = base_model_for_emb
         self.embedding_model.eval()
+        # Freeze embedding model (only used for computing router input)
+        for param in self.embedding_model.parameters():
+            param.requires_grad = False
         self._current_gating_probs = None
         if hasattr(base_model, 'model') and hasattr(base_model.model, 'layers'):
             layers = base_model.model.layers
@@ -187,9 +220,14 @@ class MoEModel(nn.Module):
         elif hasattr(self.model, 'layer_norm'):
             hidden_states = self.model.layer_norm(hidden_states)
         batch_size, seq_len = input_ids.shape
-        with torch.no_grad():
-            gating_input = self._get_embeddings(input_ids, attention_mask)
+        
+        # Compute gating probabilities (with or without gradients based on router_trainable)
+        gating_input = self._get_embeddings(input_ids, attention_mask)
+        if self.router_trainable and self.training:
             gating_probs = self.gating_network(gating_input)
+        else:
+            with torch.no_grad():
+                gating_probs = self.gating_network(gating_input)
         self._current_gating_probs = gating_probs
         if hasattr(self.model, 'layers'):
             for layer in self.model.layers:
@@ -251,10 +289,19 @@ class MoEModel(nn.Module):
                     original_parent_refs[id(layer.mlp)] = layer.mlp.parent_model
                     object.__setattr__(layer.mlp, 'parent_model', None)
             
+            # Get the full model state dict including MoE components
             if hasattr(self.model, 'save_pretrained'):
                 self.model.save_pretrained(str(save_directory))
             else:
                 torch.save(self.model.state_dict(), str(save_directory / "model.pt"))
+            
+            # Save router weights as part of the model for GGUF compatibility
+            router_state = {
+                'gating_network': self.gating_network.state_dict(),
+                'embedding_dim': self.gating_network.network[0].in_features if hasattr(self.gating_network.network[0], 'in_features') else None,
+            }
+            torch.save(router_state, str(save_directory / "router.pt"))
+            
         finally:
             for layer in layers:
                 if hasattr(layer, 'mlp') and isinstance(layer.mlp, MoEFFN):
@@ -262,6 +309,7 @@ class MoEModel(nn.Module):
                         object.__setattr__(layer.mlp, 'parent_model', original_parent_refs[id(layer.mlp)])
         
         self.tokenizer.save_pretrained(str(save_directory))
+        # Also save in legacy location for compatibility
         self.gating_network.save_pretrained(str(save_directory / "gating"))
         
         if hasattr(self.model, 'layers') and len(self.model.layers) > 0:
@@ -273,6 +321,8 @@ class MoEModel(nn.Module):
             "model_type": "moe",
             "num_experts": num_experts,
             "routing_mode": self.routing_mode,
+            "router_trainable": self.router_trainable,
+            "sparse_gating": True,
         }
         with open(save_directory / "moe_config.json", "w") as f:
             json.dump(config, f, indent=2)

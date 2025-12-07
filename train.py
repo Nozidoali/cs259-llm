@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 from config import WORK_DIR, QUANTIZE_LEVEL
 from models import load_model_and_tokenizer, freeze_all_except_mlp
 from data import prepare_truthfulqa_dataset, prepare_qmsum_dataset, download_model
-from conversion import convert_to_gguf, merge_experts_to_standard_mlp
+from conversion import convert_to_gguf, merge_experts_to_standard_mlp, prepare_moe_for_gguf
 from rmoe.finetune import train_expert
 from rmoe.gating import train_gating_network
 from rmoe.merge import merge_experts
@@ -51,6 +51,7 @@ def main():
     
     # Get timestamp from environment variable or generate one
     timestamp = os.getenv("WORKSPACE_TIMESTAMP")
+    reusing_workspace = False
     if not timestamp:
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -59,6 +60,12 @@ def main():
         if len(timestamp) != 15 or timestamp[8] != '_':
             logger.warning(f"Timestamp format may be incorrect. Expected: YYYYMMDD_HHMMSS, got: {timestamp}")
         logger.info(f"Using timestamp from WORKSPACE_TIMESTAMP environment variable: {timestamp}")
+        # Check if we're reusing an existing workspace
+        existing_workspace = WORK_DIR / "workspace" / timestamp
+        if existing_workspace.exists():
+            reusing_workspace = True
+            logger.info(f"Reusing existing workspace: {existing_workspace}")
+            logger.info("Expert training will be skipped if experts already exist")
     work_dir = WORK_DIR / "workspace" / timestamp
     work_dir.mkdir(parents=True, exist_ok=True)
     log_file = work_dir / "train.log"
@@ -82,7 +89,10 @@ def main():
         
         all_experts_exist = all((work_dir / "experts" / d).exists() and (work_dir / "experts" / d / "config.json").exists() for d in datasets)
         
-        if not args.skip_experts and not all_experts_exist:
+        # Skip expert training if reusing workspace and experts exist, or if explicitly skipped
+        skip_training = args.skip_experts or (reusing_workspace and all_experts_exist)
+        
+        if not skip_training and not all_experts_exist:
             for dataset_name in datasets:
                 logger.info(f"=" * 60)
                 logger.info(f"Training expert for dataset: {dataset_name}")
@@ -109,7 +119,9 @@ def main():
                 )
                 expert_paths.append(expert_output_dir)
         else:
-            if all_experts_exist:
+            if reusing_workspace and all_experts_exist:
+                logger.info("Reusing existing workspace with trained experts, skipping expert training")
+            elif all_experts_exist:
                 logger.info("All expert models already exist, skipping expert training")
             else:
                 logger.info("Skipping expert training (--skip-experts flag)")
@@ -156,7 +168,8 @@ def main():
                 gating_model_path=gating_path,
                 output_dir=rmoe_output_dir,
                 base_model_path=base_model_path,
-                routing_mode=merge_config.get("routing_mode", "weighted_sum"),
+                routing_mode=merge_config.get("routing_mode", "sparse_top1"),
+                router_trainable=merge_config.get("router_trainable", True),
             )
             rmoe_path = rmoe_output_dir
             logger.info(f"MoE model (rmoe_model) created at: {rmoe_path}")
@@ -264,9 +277,26 @@ def main():
             logger.info(f"Converting: {final_model_path}")
             logger.info(f"Output: {output_file}")
             logger.info(f"Quantization: {quantize_level}")
-            standard_model_path = work_dir / "rmoe_standard"
-            merge_experts_to_standard_mlp(Path(final_model_path), standard_model_path, merge_mode="average")
-            convert_to_gguf(standard_model_path, output_file, quantize_level)
+            
+            # Check if this is a sparse MoE model
+            moe_config_path = Path(final_model_path) / "moe_config.json"
+            if moe_config_path.exists():
+                with open(moe_config_path) as f:
+                    moe_cfg = json.load(f)
+                if moe_cfg.get("routing_mode") == "sparse_top1" or moe_cfg.get("sparse_gating", False):
+                    logger.info("Detected sparse MoE model - keeping experts separate for GGUF")
+                    gguf_prep_path = work_dir / "rmoe_gguf_prep"
+                    prepare_moe_for_gguf(Path(final_model_path), gguf_prep_path)
+                    convert_to_gguf(gguf_prep_path, output_file, quantize_level)
+                else:
+                    logger.info("Detected weighted MoE model - merging experts for GGUF")
+                    standard_model_path = work_dir / "rmoe_standard"
+                    merge_experts_to_standard_mlp(Path(final_model_path), standard_model_path, merge_mode="average")
+                    convert_to_gguf(standard_model_path, output_file, quantize_level)
+            else:
+                logger.info("No MoE config found - using standard conversion")
+                convert_to_gguf(Path(final_model_path), output_file, quantize_level)
+            
             logger.info(f"GGUF file saved to: {output_file}")
         else:
             logger.info("Skipping GGUF conversion")
