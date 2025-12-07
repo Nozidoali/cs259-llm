@@ -32,7 +32,7 @@ def load_base_model_for_embeddings(base_model: str):
         model_path = base_model
         logger.info(f"Using HuggingFace model: {base_model}")
     logger.info(f"Loading model from: {model_path}")
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    tokenizer = AutoTokenizer.from_pretrained(model_path, fix_mistral_regex=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     if torch.cuda.is_available():

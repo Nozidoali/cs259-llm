@@ -3,6 +3,7 @@ from pathlib import Path
 import torch
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 from config import MODEL_CONFIGS, MODELS_DIR
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,25 @@ def load_model_and_tokenizer(model_key_or_path=None, model_path=None, return_con
             logger.info(f"Loading model from HuggingFace: {model_id}")
         model_type = "causal"
         output_dir = None
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
+
+    model_path_obj = Path(model_id)
+    is_local = model_path_obj.exists() and model_path_obj.is_dir()
+    if is_local and model_path_obj.is_absolute():
+        try:
+            model_id_for_load = os.path.relpath(model_id)
+        except ValueError:
+            model_id_for_load = str(model_path_obj)
+    else:
+        model_id_for_load = model_id
+    if is_local:
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_id_for_load,
+            local_files_only=True,
+            trust_remote_code=False,
+            fix_mistral_regex=True
+        )
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(model_id, fix_mistral_regex=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     if dtype is not None:
@@ -94,10 +113,15 @@ def load_model_and_tokenizer(model_key_or_path=None, model_path=None, return_con
         model_dtype = torch.float16
     else:
         model_dtype = torch.float32
-    if model_type == "seq2seq":
-        model = AutoModelForSeq2SeqLM.from_pretrained(model_id, dtype=model_dtype)
+    if is_local:
+        model_load_kwargs = {"local_files_only": True, "trust_remote_code": False}
     else:
-        model = AutoModelForCausalLM.from_pretrained(model_id, dtype=model_dtype)
+        model_load_kwargs = {}
+    
+    if model_type == "seq2seq":
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_id_for_load, dtype=model_dtype, **model_load_kwargs)
+    else:
+        model = AutoModelForCausalLM.from_pretrained(model_id_for_load, dtype=model_dtype, **model_load_kwargs)
     if enable_gradient_checkpointing and hasattr(model, "gradient_checkpointing_enable"):
         model.gradient_checkpointing_enable()
         logger.info("Gradient checkpointing enabled")

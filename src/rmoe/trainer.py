@@ -40,8 +40,19 @@ class MultiDatasetEvalTrainer(Trainer):
     @property
     def bleurt(self):
         if self._bleurt is None:
+            import os
+            import logging
+            tf_log_level = os.environ.get('TF_CPP_MIN_LOG_LEVEL', '')
+            os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress INFO and WARNING
+            logging.getLogger('tensorflow').setLevel(logging.ERROR)
+            
             import evaluate
             self._bleurt = evaluate.load("bleurt", BLEURT_CONFIG["model_name"])
+            
+            if tf_log_level:
+                os.environ['TF_CPP_MIN_LOG_LEVEL'] = tf_log_level
+            else:
+                os.environ.pop('TF_CPP_MIN_LOG_LEVEL', None)
         return self._bleurt
     
     @property
@@ -85,19 +96,11 @@ class MultiDatasetEvalTrainer(Trainer):
             torch.cuda.synchronize()
     
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
-        """
-        Override compute_loss to add L2 regularization term to the loss.
-        This helps prevent overfitting during long training (100 epochs).
-        """
-        # Get standard loss from parent class
-        # Pass num_items_in_batch if provided (newer transformers versions)
         if num_items_in_batch is not None:
             loss, outputs = super().compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
         else:
             loss, outputs = super().compute_loss(model, inputs, return_outputs=True)
         
-        # Add L2 regularization on trainable parameters
-        # Check if model is in training mode (not eval mode)
         if self.l2_regularization > 0 and model.training:
             l2_reg = torch.tensor(0.0, device=loss.device, dtype=loss.dtype)
             for name, param in model.named_parameters():
@@ -127,10 +130,17 @@ class MultiDatasetEvalTrainer(Trainer):
             prompt = DATASET_CONFIG["format_template"].format(question=question, best_answer="").split("Answer:")[0] + "Answer:"
             inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
             inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+            
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+            gc.collect()
+            
+            do_sample = self.temperature > 0.0
+            pad_token_id = tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else tokenizer.pad_token_id
+            
             with torch.no_grad():
                 try:
-                    do_sample = self.temperature > 0.0
-                    pad_token_id = tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else tokenizer.pad_token_id
                     outputs = self.model.generate(
                         **inputs, 
                         max_new_tokens=BLEURT_CONFIG["max_new_tokens"], 
@@ -140,35 +150,54 @@ class MultiDatasetEvalTrainer(Trainer):
                         repetition_penalty=BLEURT_CONFIG.get("repetition_penalty", 1.0),
                         use_cache=True
                     )
+                except RuntimeError as e:
+                    if "out of memory" in str(e).lower() or "cuda" in str(e).lower():
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                            torch.cuda.synchronize()
+                        gc.collect()
+                        try:
+                            outputs = self.model.generate(
+                                **inputs, 
+                                max_new_tokens=BLEURT_CONFIG["max_new_tokens"], 
+                                temperature=self.temperature if do_sample else None, 
+                                do_sample=do_sample, 
+                                pad_token_id=pad_token_id, 
+                                repetition_penalty=BLEURT_CONFIG.get("repetition_penalty", 1.0),
+                                use_cache=False
+                            )
+                        except RuntimeError as e2:
+                            if (idx + 1) % 10 == 0:
+                                logger.debug(f"Generation failed (OOM) for example {idx+1}, skipping")
+                            if torch.cuda.is_available():
+                                torch.cuda.empty_cache()
+                            gc.collect()
+                            continue
+                    else:
+                        logger.warning(f"Generation failed: {e}, skipping example")
+                        continue
                 except Exception as e:
                     logger.warning(f"Generation failed: {e}, skipping example")
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
                     continue
             generated = tokenizer.decode(outputs[0], skip_special_tokens=True)
             pred = generated.split("Answer:")[-1].strip() if "Answer:" in generated else generated[len(prompt):].strip()
-            
-            if idx < 5 or (idx + 1) % 20 == 0:
-                logger.info(f"\n{'='*80}")
-                logger.info(f"Example {idx + 1}/{len(eval_dataset)}")
-                logger.info(f"Question: {question}")
-                logger.info(f"Generated Answer: {pred}")
-                logger.info(f"Correct Answers (sample): {correct_answers[0] if correct_answers else 'N/A'}")
-                logger.info(f"Incorrect Answers (sample): {incorrect_answers[0] if incorrect_answers else 'N/A'}")
-                logger.info(f"{'='*80}\n")
             
             if pred:
                 all_predictions.append(pred)
                 all_correct_refs.append(correct_answers)
                 all_incorrect_refs.append(incorrect_answers)
-                # Store for logging (sample first 3 examples)
                 if len(example_logs) < 3:
                     example_logs.append({
                         "question": question,
                         "prediction": pred,
-                        "correct_answers": correct_answers[:2],  # Show first 2 correct answers
-                        "incorrect_answers": incorrect_answers[:2]  # Show first 2 incorrect answers
+                        "correct_answers": correct_answers[:2],
+                        "incorrect_answers": incorrect_answers[:2]
                     })
+            
             del inputs, outputs, generated
-            if (idx + 1) % 10 == 0:
+            if (idx + 1) % 5 == 0:
                 self._clear_memory()
         
         self._clear_memory()
@@ -210,7 +239,6 @@ class MultiDatasetEvalTrainer(Trainer):
             f"{metric_key_prefix}_bleurt_accuracy": np.mean(acc_score_arr) if acc_score_arr else 0.0
         }
         
-        # Log example questions and answers in a readable format
         if example_logs:
             logger.info("=" * 80)
             logger.info(f"TruthfulQA Evaluation Examples ({metric_key_prefix}):")
@@ -232,7 +260,6 @@ class MultiDatasetEvalTrainer(Trainer):
         references = []
         tokenizer = self._get_tokenizer
         
-        # Store examples for readable logging
         example_logs = []
         
         for idx, example in enumerate(eval_dataset):
@@ -246,6 +273,10 @@ class MultiDatasetEvalTrainer(Trainer):
             inputs = tokenizer(prompt, return_tensors="pt", truncation=False)
             inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
             input_ids_len = inputs['input_ids'].shape[1]
+            
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
             with torch.no_grad():
                 try:
                     do_sample = self.temperature > 0.0
@@ -259,20 +290,31 @@ class MultiDatasetEvalTrainer(Trainer):
                         repetition_penalty=BLEURT_CONFIG.get("repetition_penalty", 1.0),
                         use_cache=True
                     )
+                except RuntimeError as e:
+                    if "out of memory" in str(e).lower() or "cuda" in str(e).lower():
+                        logger.warning(f"Generation failed (OOM): {e}, skipping example")
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                        gc.collect()
+                        continue
+                    else:
+                        logger.warning(f"Generation failed: {e}, skipping example")
+                        continue
                 except Exception as e:
                     logger.warning(f"Generation failed: {e}, skipping example")
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
                     continue
             full_sequences = outputs.sequences[0] if hasattr(outputs, "sequences") else outputs[0]
             generated_ids = full_sequences[input_ids_len:]
             full_text = tokenizer.decode(full_sequences, skip_special_tokens=True).strip()
             input_decoded = tokenizer.decode(inputs['input_ids'][0], skip_special_tokens=True).strip()
             pred = full_text[len(input_decoded):].strip() if full_text.startswith(input_decoded) else tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+            
             if pred and answer:
                 predictions.append(pred)
                 references.append(answer)
-                # Store for logging (sample first 3 examples)
                 if len(example_logs) < 3:
-                    # Truncate context/input for readability
                     display_context = context[:200] + "..." if len(context) > 200 else context
                     display_input = input_text[:200] + "..." if len(input_text) > 200 else input_text
                     example_logs.append({
@@ -281,8 +323,9 @@ class MultiDatasetEvalTrainer(Trainer):
                         "prediction": pred[:300] + "..." if len(pred) > 300 else pred,
                         "reference": answer[:300] + "..." if len(answer) > 300 else answer
                     })
+            
             del inputs, outputs, full_sequences, generated_ids, full_text, input_decoded
-            if (idx + 1) % 10 == 0:
+            if (idx + 1) % 5 == 0:
                 self._clear_memory()
         
         self._clear_memory()
@@ -294,7 +337,6 @@ class MultiDatasetEvalTrainer(Trainer):
         result = self.rouge.compute(predictions=predictions, references=references, use_stemmer=True)
         metrics = {f"{metric_key_prefix}_rougeL": result.get("rougeL", 0.0)}
         
-        # Log example questions and answers in a readable format
         if example_logs:
             logger.info("=" * 80)
             logger.info(f"QMSum/LongBench Evaluation Examples ({metric_key_prefix}):")

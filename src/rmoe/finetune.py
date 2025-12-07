@@ -1,6 +1,7 @@
 import os
 import torch
 import logging
+import gc
 from pathlib import Path
 from transformers import TrainingArguments, DataCollatorForLanguageModeling, EarlyStoppingCallback
 from models import load_model_and_tokenizer, freeze_all_except_mlp
@@ -37,7 +38,6 @@ def train_expert(
     qmsum_max_new_tokens=200,
     temperature=0.0,
 ):
-    logger.info(f"Training expert for dataset: {dataset_name}")
     logger.info(f"Output directory: {output_dir}")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -151,4 +151,11 @@ def train_expert(
     model.eval()
     final_results = evaluate_all_datasets(model, tokenizer, eval_datasets, device, qmsum_max_new_tokens, temperature)
     logger.info(f"Final evaluation results: {final_results}")
+    
+    del model, trainer, tokenizer
+    if use_cuda:
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+    gc.collect()
+    
     return output_dir

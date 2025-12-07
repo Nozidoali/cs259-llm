@@ -130,7 +130,7 @@ def merge_experts_to_standard_mlp(model_path: Path, output_path: Path, merge_mod
     model.load_state_dict(new_state_dict, strict=False)
     output_path.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(str(output_path))
-    AutoTokenizer.from_pretrained(str(model_path), trust_remote_code=True).save_pretrained(str(output_path))
+    AutoTokenizer.from_pretrained(str(model_path), trust_remote_code=True, fix_mistral_regex=True).save_pretrained(str(output_path))
     for fname in ["moe_config.json", "gating_config.json", "generation_config.json", "chat_template.jinja"]:
         src = model_path / fname
         if src.exists():

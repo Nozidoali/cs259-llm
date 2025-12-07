@@ -5,6 +5,7 @@ import json
 import argparse
 import sys
 import logging
+import gc
 from pathlib import Path
 from datetime import datetime
 import torch
@@ -104,39 +105,47 @@ Examples:
         expert_paths = []
         expert_config = config.get("expert_training", {})
         
-        all_experts_exist = all((work_dir / "experts" / d).exists() and (work_dir / "experts" / d / "config.json").exists() for d in datasets)
-        
-        if not args.skip_experts and not all_experts_exist:
+        if not args.skip_experts:
             for dataset_name in datasets:
-                logger.info(f"=" * 60)
-                logger.info(f"Training expert for dataset: {dataset_name}")
-                logger.info(f"=" * 60)
                 expert_output_dir = work_dir / "experts" / dataset_name
-                expert_output_dir = train_expert(
-                    base_model_path=base_model_path,
-                    dataset_name=dataset_name,
-                    output_dir=expert_output_dir,
-                    all_datasets=datasets,
-                    max_length=expert_config.get("max_length", 512),
-                    num_epochs=expert_config.get("num_epochs", 3),
-                    batch_size=expert_config.get("batch_size", 1),
-                    gradient_accumulation_steps=expert_config.get("gradient_accumulation_steps", 4),
-                    learning_rate=expert_config.get("learning_rate", 5e-5),
-                    weight_decay=expert_config.get("weight_decay", 0.01),
-                    l2_regularization=expert_config.get("l2_regularization", 0.0),
-                    max_grad_norm=expert_config.get("max_grad_norm", 1.0),
-                    disable_eval_split=expert_config.get("disable_eval_split", False),
-                    eval_split=expert_config.get("eval_split", 0.2),
-                    seed=config.get("seed", 42),
-                    qmsum_max_new_tokens=expert_config.get("qmsum_max_new_tokens", 200),
-                    temperature=expert_config.get("temperature", 0.0),
-                )
+                expert_exists = expert_output_dir.exists() and (expert_output_dir / "config.json").exists()
+                
+                if expert_exists:
+                    logger.info(f"=" * 60)
+                    logger.info(f"Expert for dataset '{dataset_name}' already exists at {expert_output_dir}")
+                    logger.info(f"Skipping training and using existing expert")
+                    logger.info(f"=" * 60)
+                else:
+                    logger.info(f"=" * 60)
+                    logger.info(f"Training expert for dataset: {dataset_name}")
+                    expert_output_dir = train_expert(
+                        base_model_path=base_model_path,
+                        dataset_name=dataset_name,
+                        output_dir=expert_output_dir,
+                        all_datasets=datasets,
+                        max_length=expert_config.get("max_length", 512),
+                        num_epochs=expert_config.get("num_epochs", 3),
+                        batch_size=expert_config.get("batch_size", 1),
+                        gradient_accumulation_steps=expert_config.get("gradient_accumulation_steps", 4),
+                        learning_rate=expert_config.get("learning_rate", 5e-5),
+                        weight_decay=expert_config.get("weight_decay", 0.01),
+                        l2_regularization=expert_config.get("l2_regularization", 0.0),
+                        max_grad_norm=expert_config.get("max_grad_norm", 1.0),
+                        disable_eval_split=expert_config.get("disable_eval_split", False),
+                        eval_split=expert_config.get("eval_split", 0.2),
+                        seed=config.get("seed", 42),
+                        qmsum_max_new_tokens=expert_config.get("qmsum_max_new_tokens", 200),
+                        temperature=expert_config.get("temperature", 0.0),
+                    )
+                    
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                        torch.cuda.synchronize()
+                    gc.collect()
+                
                 expert_paths.append(expert_output_dir)
         else:
-            if all_experts_exist:
-                logger.info("All expert models already exist, skipping expert training")
-            else:
-                logger.info("Skipping expert training (--skip-experts flag)")
+            logger.info("Skipping expert training (--skip-experts flag)")
             expert_paths = [work_dir / "experts" / d for d in datasets]
         gating_output_dir = work_dir / "gating_network"
         gating_exists = gating_output_dir.exists() and (gating_output_dir / "gating_network.pt").exists()

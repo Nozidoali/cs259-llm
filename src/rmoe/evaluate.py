@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import logging
+import gc
 from config import BLEURT_CONFIG, DATASET_CONFIG
 
 logger = logging.getLogger(__name__)
@@ -35,18 +36,20 @@ def evaluate_truthfulqa(model, tokenizer, dataset, device=None, temperature=0.0)
             inputs = {k: v.to(gen_device) for k, v in inputs.items()}
             with torch.no_grad():
                 do_sample = temperature > 0.0
+                pad_token_id = tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else tokenizer.pad_token_id
                 outputs = model.generate(
                     **inputs, 
                     max_new_tokens=BLEURT_CONFIG["max_new_tokens"], 
                     temperature=temperature if do_sample else None, 
                     do_sample=do_sample, 
-                    pad_token_id=tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else tokenizer.pad_token_id,
-                    repetition_penalty=BLEURT_CONFIG.get("repetition_penalty", 1.0)
+                    pad_token_id=pad_token_id,
+                    repetition_penalty=BLEURT_CONFIG.get("repetition_penalty", 1.0),
+                    use_cache=True
                 )
             generated = tokenizer.decode(outputs[0], skip_special_tokens=True)
             pred = generated.split("Answer:")[-1].strip() if "Answer:" in generated else generated[len(prompt):].strip()
             
-            if idx < 5 or (idx + 1) % 20 == 0:
+            if idx < 5:
                 logger.info(f"\n{'='*80}")
                 logger.info(f"Example {idx + 1}/{len(dataset)}")
                 logger.info(f"Input Prompt: {prompt}")
@@ -91,11 +94,15 @@ def evaluate_truthfulqa(model, tokenizer, dataset, device=None, temperature=0.0)
                 acc_score = int(max(example_scores_true) > max(example_scores_false)) if example_scores_true and example_scores_false else 0
                 max_score_arr.append(max_score)
                 acc_score_arr.append(acc_score)
+            del batch_preds, batch_correct, batch_incorrect, expanded_preds_true, expanded_refs_true, expanded_preds_false, expanded_refs_false, scores_true, scores_false
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+        
         avg_max_score = np.mean(max_score_arr) if max_score_arr else 0.0
         accuracy = np.mean(acc_score_arr) if acc_score_arr else 0.0
         return {"bleurt_max_score": avg_max_score, "bleurt_accuracy": accuracy}
     finally:
-        # Move model back to original device if we moved it
         if model_moved:
             model.to(device)
 

@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import logging
+import gc
 from pathlib import Path
 from typing import Optional, Union, Literal, List
 import torch
@@ -92,12 +93,54 @@ class MoEModel(nn.Module):
         self.tokenizer = base_tokenizer
         base_model = base_model.to(self.device)
         logger.info(f"Loading {len(expert_paths)} expert models...")
-        expert_models = []
+        
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
+        expert_mlps_by_layer = {}  # {layer_idx: [mlp0, mlp1, mlp2, ...]}
+        
+        if hasattr(base_model, 'model') and hasattr(base_model.model, 'layers'):
+            num_layers = len(base_model.model.layers)
+        elif hasattr(base_model, 'layers'):
+            num_layers = len(base_model.layers)
+        elif hasattr(base_model, 'transformer') and hasattr(base_model.transformer, 'h'):
+            num_layers = len(base_model.transformer.h)
+        else:
+            raise ValueError(f"Unsupported model architecture")
+        
+        for layer_idx in range(num_layers):
+            expert_mlps_by_layer[layer_idx] = []
+        
         for idx, expert_path in enumerate(expert_paths):
             logger.info(f"Loading expert {idx} from: {expert_path}")
             expert_model, _ = load_model_and_tokenizer(model_path=str(expert_path), dtype=torch.float32)
-            expert_model = expert_model.to(self.device)
-            expert_models.append(expert_model)
+            
+            if hasattr(expert_model, 'model') and hasattr(expert_model.model, 'layers'):
+                expert_layers = expert_model.model.layers
+            elif hasattr(expert_model, 'layers'):
+                expert_layers = expert_model.layers
+            elif hasattr(expert_model, 'transformer') and hasattr(expert_model.transformer, 'h'):
+                expert_layers = expert_model.transformer.h
+            else:
+                raise ValueError(f"Unsupported expert model architecture")
+            
+            for layer_idx in range(num_layers):
+                expert_mlp = expert_layers[layer_idx].mlp
+                # Create a copy of the MLP and move to device
+                expert_mlp_copy = expert_mlp.to(self.device)
+                expert_mlps_by_layer[layer_idx].append(expert_mlp_copy)
+            
+            del expert_model, expert_layers
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+        
+        logger.info(f"Extracted MLP layers from {len(expert_paths)} experts")
+        
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+        
         logger.info(f"Loading gating network from: {gating_model_path}")
         base_model_for_emb, _, embedding_dim = load_base_model_for_embeddings(str(base_model_path))
         base_model_for_emb = base_model_for_emb.to(self.device)
@@ -130,13 +173,14 @@ class MoEModel(nn.Module):
         self.embedding_model.eval()
         self._current_gating_probs = None
         
-        # Load shared expert if enabled
         self.shared_expert_model = None
         self.shared_expert_gating = None
         if use_shared_expert:
-            # Load the original pre-trained model as shared expert
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+            
             if shared_expert_path is None:
-                # Use the original base model (before fine-tuning) as shared expert
                 shared_expert_path = base_model_path
             shared_expert_path = Path(shared_expert_path)
             logger.info(f"Loading shared expert from: {shared_expert_path}")
@@ -144,7 +188,10 @@ class MoEModel(nn.Module):
             self.shared_expert_model = shared_expert_model.to(self.device)
             self.shared_expert_model.eval()
             
-            # Load shared expert gating network
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+            
             shared_gating_checkpoint = gating_model_path / "shared_expert_gating.pt"
             if not shared_gating_checkpoint.exists():
                 raise FileNotFoundError(f"Shared expert gating checkpoint not found at {shared_gating_checkpoint}")
@@ -167,13 +214,11 @@ class MoEModel(nn.Module):
         num_layers = len(layers)
         logger.info(f"Found {num_layers} layers in base model")
         
-        # Auto-detect architecture if needed
         if self.target_architecture == "auto":
             if use_shared_expert:
                 self.target_architecture = "qwen2moe"
                 logger.info(f"Auto-detected architecture: qwen2moe (with shared expert)")
             else:
-                # Default to qwen3moe for dense models without shared expert
                 self.target_architecture = "qwen3moe"
                 logger.info(f"Auto-detected architecture: qwen3moe (no shared expert requirement)")
         else:
@@ -183,18 +228,7 @@ class MoEModel(nn.Module):
         for layer_idx in range(num_layers):
             layer = layers[layer_idx]
             if hasattr(layer, 'mlp'):
-                expert_mlps = []
-                for expert_model in expert_models:
-                    if hasattr(expert_model, 'model') and hasattr(expert_model.model, 'layers'):
-                        expert_layers = expert_model.model.layers
-                    elif hasattr(expert_model, 'layers'):
-                        expert_layers = expert_model.layers
-                    elif hasattr(expert_model, 'transformer') and hasattr(expert_model.transformer, 'h'):
-                        expert_layers = expert_model.transformer.h
-                    else:
-                        raise ValueError(f"Unsupported expert model architecture")
-                    expert_mlp = expert_layers[layer_idx].mlp
-                    expert_mlps.append(expert_mlp)
+                expert_mlps = expert_mlps_by_layer[layer_idx]
                 moe_ffn = MoEFFN(expert_mlps, self, routing_mode=routing_mode)
                 layer.mlp = moe_ffn
                 expert_mlps_list.append(expert_mlps)
@@ -293,7 +327,6 @@ class MoEModel(nn.Module):
         if hasattr(self.model, 'layers') and len(self.model.layers) > 0:
             if hasattr(self.model.layers[0].mlp, 'expert_mlps'):
                 num_experts = len(self.model.layers[0].mlp.expert_mlps)
-                # Get intermediate size from first expert's gate_proj
                 first_expert = self.model.layers[0].mlp.expert_mlps[0]
                 if hasattr(first_expert, 'gate_proj'):
                     moe_intermediate_size = first_expert.gate_proj.out_features
@@ -340,9 +373,7 @@ class MoEModel(nn.Module):
                 
                 state_dict[f'model.layers.{layer_idx}.mlp.gate.weight'] = gating_weight.clone()
                 
-                # Save shared expert tensors if enabled
                 if self.use_shared_expert and self.shared_expert_model is not None:
-                    # Get shared expert FFN from the original base model
                     if hasattr(self.shared_expert_model, 'model') and hasattr(self.shared_expert_model.model, 'layers'):
                         shared_layers = self.shared_expert_model.model.layers
                     elif hasattr(self.shared_expert_model, 'layers'):
@@ -360,13 +391,11 @@ class MoEModel(nn.Module):
                         if hasattr(shared_mlp, 'down_proj'):
                             state_dict[f'model.layers.{layer_idx}.mlp.shared_expert.down_proj.weight'] = shared_mlp.down_proj.weight.detach()
                     
-                    # Save shared expert gating weight (linear layer weight from SharedExpertGating)
-                    # This is the ffn_gate_inp_shexp.weight tensor
-                    # Note: Must clone for each layer to avoid shared memory error
                     if self.shared_expert_gating is not None:
-                        shared_gating_weight = self.shared_expert_gating.network.weight.detach()  # Shape: (1, n_embd)
-                        # Qwen2MoE expects shape (n_embd,) for ffn_gate_inp_shexp.weight
-                        state_dict[f'model.layers.{layer_idx}.mlp.shared_expert_gate.weight'] = shared_gating_weight.squeeze(0).clone()
+                        shared_gating_weight = self.shared_expert_gating.network.weight.detach()
+                        shared_gating_weight_zeroed = shared_gating_weight.squeeze(0).clone()
+                        shared_gating_weight_zeroed.fill_(-100.0)
+                        state_dict[f'model.layers.{layer_idx}.mlp.shared_expert_gate.weight'] = shared_gating_weight_zeroed
         
         if self.lm_head is not None:
             state_dict['lm_head.weight'] = self.lm_head.weight.detach().clone()
@@ -382,14 +411,12 @@ class MoEModel(nn.Module):
         self.tokenizer.save_pretrained(str(save_directory))
         self.gating_network.save_pretrained(str(save_directory / "gating"))
         
-        # Save shared expert gating if enabled
         if self.use_shared_expert and self.shared_expert_gating is not None:
             self.shared_expert_gating.save_pretrained(str(save_directory / "gating"))
             logger.info("Saved shared expert gating network")
         
         base_config = self.config.to_dict() if hasattr(self.config, 'to_dict') else dict(self.config)
         
-        # Set architecture based on target_architecture
         if self.target_architecture == "qwen3moe":
             base_config['architectures'] = ['Qwen3MoeForCausalLM']
             base_config['model_type'] = 'qwen3moe'
@@ -403,22 +430,16 @@ class MoEModel(nn.Module):
         
         base_config['num_experts'] = num_experts
         
-        # Configure sparse gating based on routing mode
         if self.routing_mode == "select_one":
-            # Only compute the single best expert
             base_config['num_experts_per_tok'] = 1
         elif self.routing_mode == "weighted_sum":
-            # Compute top-2 experts for weighted combination
-            # Set to 2 for sparse gating, or num_experts for dense (current behavior)
             base_config['num_experts_per_tok'] = min(2, num_experts)
         else:
             base_config['num_experts_per_tok'] = num_experts
         if moe_intermediate_size is not None:
             base_config['moe_intermediate_size'] = moe_intermediate_size
         
-        # Add shared expert config if enabled
         if self.use_shared_expert:
-            # Get shared expert intermediate size from the shared expert model
             if hasattr(self.shared_expert_model, 'model') and hasattr(self.shared_expert_model.model, 'layers'):
                 shared_layer = self.shared_expert_model.model.layers[0]
             elif hasattr(self.shared_expert_model, 'layers'):
