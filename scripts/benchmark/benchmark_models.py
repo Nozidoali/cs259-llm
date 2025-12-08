@@ -61,9 +61,17 @@ MODEL_CONFIGS = [
     
     # Qwen models (different sizes)
     {
+        "name": "qwen2-0.5b",
+        "hf_repo": "local",  # Use local file from models/rmoe-gguf/
+        "quantizations": ["Q8_0"],  # Match local filename case
+        "param_size": "0.5B",
+        "layers": 24,
+        "local_filename": "qwen2-0.5b_Q8_0.gguf",  # Specify exact local filename
+    },
+    {
         "name": "qwen2.5-0.5b",
         "hf_repo": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
-        "quantizations": ["q4_k_m", "q8_0", "f16"],
+        "quantizations": ["q4_k_m", "q8_0"],  # f16 not available in HF repo
         "param_size": "0.5B",
         "layers": 24,
     },
@@ -474,11 +482,19 @@ class ModelBenchmarker:
             # bartowski uses: Mistral-7B-Instruct-v0.3-Q4_K_M.gguf
             return f"Mistral-7B-Instruct-v0.3-{quant}.gguf"
         elif "qwen" in name.lower():
+            # Qwen2 uses: qwen2-0.5b-instruct-q8_0.gguf
             # Qwen2.5 uses: qwen2.5-0.5b-instruct-q4_k_m.gguf
             # Qwen3 uses: Qwen3-0.6B-Q4_K_M.gguf (converted locally)
             if "qwen3" in name.lower():
                 return f"Qwen3-0.6B-{quant}.gguf"
+            elif "qwen2.5" in name.lower():
+                size = model_config["param_size"].lower()
+                return f"qwen2.5-{size}-instruct-{quant.lower()}.gguf"
+            elif "qwen2-" in name.lower():
+                size = model_config["param_size"].lower()
+                return f"qwen2-{size}-instruct-{quant.lower()}.gguf"
             else:
+                # Fallback for other qwen variants
                 size = model_config["param_size"].lower()
                 return f"qwen2.5-{size}-instruct-{quant.lower()}.gguf"
         elif "phi-3.5" in name:
@@ -519,13 +535,25 @@ class ModelBenchmarker:
         logger.info(f"{'='*80}")
         
         # Generate filename
-        filename = self.get_gguf_filename(model_config, quant)
+        # Check if model config specifies a local filename
+        if "local_filename" in model_config:
+            filename = model_config["local_filename"]
+            logger.info(f"Using local file: {filename}")
+        else:
+            filename = self.get_gguf_filename(model_config, quant)
         
-        # Step 1: Download model
-        local_path = self.download_model(hf_repo, filename)
-        if not local_path:
-            logger.error(f"Failed to download {filename}, skipping...")
-            return None
+        # Step 1: Download model (or verify local file exists)
+        if hf_repo == "local":
+            local_path = self.models_dir / filename
+            if not local_path.exists():
+                logger.error(f"Local file not found: {local_path}")
+                return None
+            logger.info(f"Using existing local file: {filename} ({local_path.stat().st_size / (1024**2):.2f} MB)")
+        else:
+            local_path = self.download_model(hf_repo, filename)
+            if not local_path:
+                logger.error(f"Failed to download {filename}, skipping...")
+                return None
         
         # Step 2: Push to device
         if not self.push_to_device(local_path):

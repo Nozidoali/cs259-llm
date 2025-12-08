@@ -51,6 +51,7 @@ def detect_congestion(df, distance_threshold=0.08):
     """
     Detect points that are too close together and should skip annotations.
     Returns a set of indices to skip.
+    Excludes special models (baseline and Qwen 0.5B) from congestion detection.
     """
     # Normalize coordinates to [0, 1] range for distance calculation
     x_vals = df['tokens_per_sec_geomean'].values
@@ -62,8 +63,17 @@ def detect_congestion(df, distance_threshold=0.08):
     skip_indices = set()
     annotated_indices = set()
     
+    # First, add all special models to annotated_indices (they're always shown)
     for i in range(len(df)):
-        if i in skip_indices:
+        model_name = df.iloc[i]['model_name']
+        quantization = df.iloc[i]['quantization']
+        is_baseline = (model_name == 'llama-3.2-1b' and quantization == 'Q8_0')
+        is_qwen_0_5b = (model_name == 'qwen2-0.5b')
+        if is_baseline or is_qwen_0_5b:
+            annotated_indices.add(i)
+    
+    for i in range(len(df)):
+        if i in skip_indices or i in annotated_indices:
             continue
             
         # Check distance to all annotated points
@@ -93,6 +103,9 @@ for idx, row in df.iterrows():
     param_size = row['param_size']
     label_full = f"{row['model_name']} {row['quantization']}"
     
+    # Check if this is Qwen 0.5B
+    is_qwen_0_5b = (model_name == 'qwen2-0.5b')
+    
     # Only add to legend if this model hasn't been plotted yet
     if model_name not in plotted_models:
         label = f"{model_name} ({param_size})"
@@ -100,31 +113,53 @@ for idx, row in df.iterrows():
     else:
         label = None
     
+    # Override color for Qwen 0.5B
+    point_color = 'red' if is_qwen_0_5b else model_colors[model_name]
+    
     # Plot with square markers
     plt.scatter(
         row['tokens_per_sec_geomean'], 
         row['model_size_mb'],
         s=200,  # Larger markers
         alpha=0.7,
-        color=model_colors[model_name],
+        color=point_color,
         marker='s',  # Square markers
         label=label
     )
     
-    # Annotate only if not in congested area
-    if idx not in skip_indices:
-        # Make baseline llama annotation blue
-        is_baseline = (model_name == 'llama-3.2-1b' and quantization == 'Q8_0')
-        text_color = 'blue' if is_baseline else 'black'
+    # Check if this is a special model that should always be annotated
+    is_baseline = (model_name == 'llama-3.2-1b' and quantization == 'Q8_0')
+    is_qwen_0_5b = (model_name == 'qwen2-0.5b')
+    
+    # Annotate if not in congested area OR if it's a special model (baseline or Qwen 0.5B)
+    if idx not in skip_indices or is_baseline or is_qwen_0_5b:
+        # Set annotation color: blue for baseline, red for Qwen 0.5B, black for others
+        if is_baseline:
+            text_color = 'blue'
+            font_weight = 'normal'
+            bbox_props = None
+            text_offset = (5, 5)
+        elif is_qwen_0_5b:
+            text_color = 'red'
+            font_weight = 'bold'
+            bbox_props = dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='red', linewidth=1.5)
+            text_offset = (15, 15)  # Upper right positioning
+        else:
+            text_color = 'black'
+            font_weight = 'normal'
+            bbox_props = None
+            text_offset = (5, 5)
         
         plt.annotate(
             label_full,
             (row['tokens_per_sec_geomean'], row['model_size_mb']),
-            xytext=(5, 5),
+            xytext=text_offset,
             textcoords='offset points',
             fontsize=18,
             alpha=0.7,
-            color=text_color
+            color=text_color,
+            weight=font_weight,
+            bbox=bbox_props
         )
 
 # Add reference lines if reference point exists
