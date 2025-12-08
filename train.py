@@ -4,341 +4,391 @@ import os
 import json
 import argparse
 import sys
-import subprocess
 import logging
+import gc
 from pathlib import Path
 from datetime import datetime
+import torch
+from transformers import TrainingArguments, DataCollatorForLanguageModeling, Trainer
+from datasets import concatenate_datasets
+
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from config import (
-    MODELS_DIR,
-    GGUF_OUTPUT_DIR,
-    MODEL_CONFIGS,
-    TRAINING_CONFIG,
-    QUANTIZE_LEVEL,
-)
-from finetune import (
-    download_model,
-    load_model_and_tokenizer,
-    prepare_truthfulqa_dataset,
-)
-from convert import convert_to_gguf
+from config import WORK_DIR, QUANTIZE_LEVEL
+from models import load_model_and_tokenizer, freeze_all_except_mlp
+from data import prepare_truthfulqa_dataset, prepare_qmsum_dataset, download_model
+from conversion import convert_to_gguf, merge_experts_to_standard_mlp
+from rmoe.finetune import train_expert
+from rmoe.gating import train_gating_network, train_shared_expert_gating
+from rmoe.merge import merge_experts
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('train.log'),
-        logging.StreamHandler()
-    ]
+    handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
 
-
-def run_finetune(config):
-    """Run the fine-tuning step"""
-    logger.info("=" * 60)
-    logger.info("Step 1: Fine-tuning")
-    logger.info("=" * 60)
-    
-    model_key = config["model"]
-    if model_key not in MODEL_CONFIGS:
-        raise ValueError(f"Unknown model key: {model_key}. Available: {list(MODEL_CONFIGS.keys())}")
-    
-    model_config = MODEL_CONFIGS[model_key]
-    
-    # Load model and tokenizer
-    model_path = config.get("model_path")
-    model, tokenizer, default_output_dir, model_type = load_model_and_tokenizer(
-        model_key, model_path
-    )
-    
-    # Use custom output dir if specified, otherwise use default
-    output_dir = Path(config.get("output_dir", default_output_dir))
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Merge training config
-    training_config = TRAINING_CONFIG.copy()
-    training_config.update({
-        k: v for k, v in config.items() 
-        if k in ["max_length", "num_epochs", "batch_size", 
-                 "gradient_accumulation_steps", "learning_rate", "weight_decay",
-                 "eval_split", "seed"]
-    })
-    
-    use_bleurt = config.get("use_bleurt", False)
-    
-    logger.info(f"Fine-tuning {model_config['display_name']} on TruthfulQA")
-    logger.info(f"Output: {output_dir}")
-    logger.info(f"Max length: {training_config['max_length']}, Epochs: {training_config['num_epochs']}")
-    logger.info(f"Batch size: {training_config['batch_size']}, "
-                f"Gradient accumulation: {training_config.get('gradient_accumulation_steps', 1)}")
-    logger.info(f"Effective batch size: {training_config['batch_size'] * training_config.get('gradient_accumulation_steps', 1)}")
-    logger.info(f"LR: {training_config['learning_rate']}, Using BLEURT: {use_bleurt}")
-    
-    # Prepare dataset
-    dataset = prepare_truthfulqa_dataset(
-        tokenizer, 
-        max_length=training_config["max_length"], 
-        keep_metadata=use_bleurt, 
-        model_type=model_type
-    )
-    dataset = dataset.train_test_split(
-        test_size=training_config["eval_split"], 
-        seed=training_config["seed"]
-    )
-    
-    logger.info(f"Train: {len(dataset['train'])}, Eval: {len(dataset['test'])}")
-    
-    # Import training dependencies
-    import torch
-    from transformers import (
-        TrainingArguments,
-        Trainer,
-        DataCollatorForLanguageModeling,
-        DataCollatorForSeq2Seq,
-    )
-    from bleurt_trainer import BLEURTTrainer
-    
-    use_mps = torch.backends.mps.is_available()
-    use_cuda = torch.cuda.is_available()
-    
-    # Setup training arguments
-    training_args = TrainingArguments(
-        output_dir=str(output_dir),
-        overwrite_output_dir=True,
-        num_train_epochs=training_config["num_epochs"],
-        per_device_train_batch_size=training_config["batch_size"],
-        per_device_eval_batch_size=training_config["batch_size"],
-        gradient_accumulation_steps=training_config.get("gradient_accumulation_steps", 1),
-        learning_rate=training_config["learning_rate"],
-        weight_decay=training_config["weight_decay"],
-        logging_dir=str(Path("logs")),
-        logging_steps=10,
-        eval_strategy="epoch",
-        save_strategy="epoch",
-        save_total_limit=2,
-        load_best_model_at_end=True,
-        metric_for_best_model="eval_bleurt_score" if use_bleurt else "eval_loss",
-        greater_is_better=True if use_bleurt else False,
-        fp16=use_cuda,
-        bf16=use_mps,
-        dataloader_num_workers=0 if use_mps else 2,
-        report_to="none",
-        seed=training_config["seed"],
-    )
-    
-    # Setup trainer
-    trainer_class = BLEURTTrainer if use_bleurt else Trainer
-    data_collator = (
-        DataCollatorForSeq2Seq(tokenizer=tokenizer) if model_type == "seq2seq" 
-        else DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-    )
-    
-    trainer_kwargs = {
-        "model": model,
-        "args": training_args,
-        "train_dataset": dataset["train"],
-        "eval_dataset": dataset["test"],
-        "data_collator": data_collator,
-        "tokenizer": tokenizer,
-    }
-    
-    if use_bleurt:
-        trainer_kwargs["eval_dataset_with_answers"] = dataset["test"]
-        trainer_kwargs["model_type"] = model_type
-    
-    trainer = trainer_class(**trainer_kwargs)
-    
-    logger.info("Starting training...")
-    trainer.train()
-    
-    logger.info(f"Saving model to: {output_dir}")
-    trainer.save_model()
-    tokenizer.save_pretrained(str(output_dir))
-    
-    logger.info("✓ Fine-tuning complete!")
-    return output_dir
-
-
-def run_convert(config, finetuned_model_path):
-    """Run the conversion step"""
-    logger.info("=" * 60)
-    logger.info("Step 2: Converting to GGUF")
-    logger.info("=" * 60)
-    
-    model_key = config["model"]
-    model_config = MODEL_CONFIGS[model_key]
-    
-    if not model_config.get("supports_gguf", True):
-        logger.warning(f"Model {model_config['display_name']} does not support GGUF conversion. Skipping conversion step.")
-        return None
-    
-    # Determine output file
-    if config.get("gguf_output"):
-        output_file = Path(config["gguf_output"])
-    else:
-        quantize = config.get("quantize", QUANTIZE_LEVEL)
-        output_file = GGUF_OUTPUT_DIR / f"{finetuned_model_path.name}-{quantize}.gguf"
-    
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    
-    quantize_level = config.get("quantize", QUANTIZE_LEVEL)
-    
-    logger.info(f"Converting: {finetuned_model_path}")
-    logger.info(f"Output: {output_file}")
-    logger.info(f"Quantization: {quantize_level}")
-    
-    convert_to_gguf(finetuned_model_path, output_file, quantize_level)
-    
-    logger.info("✓ Conversion complete!")
-    return output_file
-
-
-def run_push(config, gguf_file_path):
-    """Run the ADB push step"""
-    logger.info("=" * 60)
-    logger.info("Step 3: Pushing to device")
-    logger.info("=" * 60)
-    
-    if not config.get("push_to_device", False):
-        logger.info("Skipping push step (push_to_device is False)")
-        return
-    
-    if gguf_file_path is None or not gguf_file_path.exists():
-        logger.error("No GGUF file to push. Skipping push step.")
-        return
-    
-    push_script = Path(__file__).parent / "scripts" / "push-model.sh"
-    if not push_script.exists():
-        logger.error(f"Push script not found: {push_script}")
-        return
-    
-    device_path = config.get("device_path", "/data/local/tmp/gguf/")
-    adb_serial = config.get("adb_serial")
-    
-    logger.info(f"Pushing {gguf_file_path.name} to device")
-    logger.info(f"Device path: {device_path}")
-    if adb_serial:
-        logger.info(f"ADB serial: {adb_serial}")
-    
-    # Build command
-    cmd = ["bash", str(push_script), str(gguf_file_path), device_path]
-    if adb_serial:
-        cmd.extend(["--serial", adb_serial])
-    
-    logger.info(f"Running: {' '.join(cmd)}")
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    
-    if result.returncode == 0:
-        logger.info("✓ Push complete!")
-        logger.info(result.stdout)
-    else:
-        logger.error(f"Push failed with return code {result.returncode}")
-        logger.error(result.stderr)
-        raise RuntimeError(f"ADB push failed: {result.stderr}")
-
-
 def main():
     parser = argparse.ArgumentParser(
-        description="Complete training pipeline: fine-tune, convert, and push",
+        description="RMoE training pipeline",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Example JSON config:
-{
-    "model": "qwen2-0.5b",
-    "output_dir": "models/qwen2-0.5b-instruct-finetuned",
-    "max_length": 512,
-    "num_epochs": 3,
-    "batch_size": 1,
-    "gradient_accumulation_steps": 4,
-    "learning_rate": 5e-5,
-    "use_bleurt": false,
-    "quantize": "Q4_0",
-    "gguf_output": "models/gguf/qwen2-0.5b-finetuned-Q4_0.gguf",
-    "push_to_device": true,
-    "device_path": "/data/local/tmp/gguf/",
-    "adb_serial": null
-}
+Conversion modes:
+  preserve_moe - Keep all experts with routing (NEW, recommended)
+  average      - Average experts into single model (OLD, simpler)
+
+Examples:
+  # Full pipeline with MoE preservation
+  python train.py config.json --conversion-mode preserve_moe
+  
+  # Full pipeline with expert averaging (original behavior)
+  python train.py config.json --conversion-mode average
+  
+  # Skip training, only convert existing model
+  python train.py config.json --skip-experts --skip-gating --conversion-mode preserve_moe
         """
     )
+    parser.add_argument("config", help="Path to JSON config file")
+    parser.add_argument("--skip-experts", action="store_true", help="Skip expert training")
+    parser.add_argument("--skip-gating", action="store_true", help="Skip gating network training")
+    parser.add_argument("--skip-merge", action="store_true", help="Skip model merging")
+    parser.add_argument("--skip-finetune", action="store_true", help="Skip full finetuning")
+    parser.add_argument("--skip-convert", action="store_true", help="Skip GGUF conversion")
     parser.add_argument(
-        "config",
-        help="Path to JSON config file"
+        "--conversion-mode",
+        choices=["preserve_moe", "average"],
+        default="average",
+        help="Conversion mode: 'preserve_moe' (keep all experts) or 'average' (average experts). Default: average (backward compatible)"
     )
-    parser.add_argument(
-        "--skip-finetune",
-        action="store_true",
-        help="Skip fine-tuning step"
-    )
-    parser.add_argument(
-        "--skip-convert",
-        action="store_true",
-        help="Skip conversion step"
-    )
-    parser.add_argument(
-        "--skip-push",
-        action="store_true",
-        help="Skip push step"
-    )
-    
     args = parser.parse_args()
-    
     if not os.path.exists(args.config):
         logger.error(f"Config file not found: {args.config}")
         sys.exit(1)
-    
     with open(args.config, "r") as f:
         config = json.load(f)
+    if config.get("method") != "rmoe":
+        logger.error("Config must specify method: 'rmoe'")
+        sys.exit(1)
     
-    logger.info(f"Starting training pipeline with config: {args.config}")
-    logger.info(f"Timestamp: {datetime.now().isoformat()}")
-    
-    finetuned_model_path = None
-    gguf_file_path = None
-    
+    # Get timestamp from environment variable or generate one
+    timestamp = os.getenv("WORKSPACE_TIMESTAMP")
+    if not timestamp:
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        logger.warning(f"WORKSPACE_TIMESTAMP environment variable is not set. Auto-generated timestamp: {timestamp}")
+    else:
+        if len(timestamp) != 15 or timestamp[8] != '_':
+            logger.warning(f"Timestamp format may be incorrect. Expected: YYYYMMDD_HHMMSS, got: {timestamp}")
+        logger.info(f"Using timestamp from WORKSPACE_TIMESTAMP environment variable: {timestamp}")
+    work_dir = WORK_DIR / "workspace" / timestamp
+    work_dir.mkdir(parents=True, exist_ok=True)
+    log_file = work_dir / "train.log"
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    logger.addHandler(file_handler)
+    logger.info(f"Work directory: {work_dir}")
+    base_model = config.get("base_model", "qwen2-0.5b")
+    from config import MODEL_CONFIGS
+    if base_model in MODEL_CONFIGS:
+        base_model_path = str(download_model(base_model))
+    else:
+        base_model_path = base_model
+    if not base_model_path:
+        logger.error("Config must specify base_model")
+        sys.exit(1)
     try:
-        # Step 1: Fine-tuning
-        if not args.skip_finetune:
-            finetuned_model_path = run_finetune(config)
+        datasets = config.get("datasets", ["truthfulqa", "longbench"])
+        expert_paths = []
+        expert_config = config.get("expert_training", {})
+        
+        if not args.skip_experts:
+            for dataset_name in datasets:
+                expert_output_dir = work_dir / "experts" / dataset_name
+                expert_exists = expert_output_dir.exists() and (expert_output_dir / "config.json").exists()
+                
+                if expert_exists:
+                    logger.info(f"=" * 60)
+                    logger.info(f"Expert for dataset '{dataset_name}' already exists at {expert_output_dir}")
+                    logger.info(f"Skipping training and using existing expert")
+                    logger.info(f"=" * 60)
+                else:
+                    logger.info(f"=" * 60)
+                    logger.info(f"Training expert for dataset: {dataset_name}")
+                    expert_output_dir = train_expert(
+                        base_model_path=base_model_path,
+                        dataset_name=dataset_name,
+                        output_dir=expert_output_dir,
+                        all_datasets=datasets,
+                        max_length=expert_config.get("max_length", 512),
+                        num_epochs=expert_config.get("num_epochs", 3),
+                        batch_size=expert_config.get("batch_size", 1),
+                        gradient_accumulation_steps=expert_config.get("gradient_accumulation_steps", 4),
+                        learning_rate=expert_config.get("learning_rate", 5e-5),
+                        weight_decay=expert_config.get("weight_decay", 0.01),
+                        l2_regularization=expert_config.get("l2_regularization", 0.0),
+                        max_grad_norm=expert_config.get("max_grad_norm", 1.0),
+                        disable_eval_split=expert_config.get("disable_eval_split", False),
+                        eval_split=expert_config.get("eval_split", 0.2),
+                        seed=config.get("seed", 42),
+                        qmsum_max_new_tokens=expert_config.get("qmsum_max_new_tokens", 200),
+                        temperature=expert_config.get("temperature", 0.0),
+                    )
+                    
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                        torch.cuda.synchronize()
+                    gc.collect()
+                
+                expert_paths.append(expert_output_dir)
         else:
-            logger.info("Skipping fine-tuning step")
-            # Try to infer path from config
-            if config.get("output_dir"):
-                finetuned_model_path = Path(config["output_dir"])
+            logger.info("Skipping expert training (--skip-experts flag)")
+            expert_paths = [work_dir / "experts" / d for d in datasets]
+        gating_output_dir = work_dir / "gating_network"
+        gating_exists = gating_output_dir.exists() and (gating_output_dir / "gating_network.pt").exists()
+        
+        if not args.skip_gating and not gating_exists:
+            logger.info(f"=" * 60)
+            logger.info("Training gating network")
+            logger.info(f"=" * 60)
+            gating_config = config.get("gating", {})
+            gating_output_dir = train_gating_network(
+                base_model=base_model_path,
+                datasets=datasets,
+                output_dir=gating_output_dir,
+                hidden_dims=gating_config.get("hidden_dims", [512, 256]),
+                dropout=gating_config.get("dropout", 0.1),
+                learning_rate=gating_config.get("learning_rate", 1e-4),
+                batch_size=gating_config.get("batch_size", 32),
+                num_epochs=gating_config.get("num_epochs", 10),
+                weight_decay=gating_config.get("weight_decay", 0.01),
+                train_split=gating_config.get("train_split", 0.7),
+                val_split=gating_config.get("val_split", 0.15),
+                test_split=gating_config.get("test_split", 0.15),
+                seed=config.get("seed", 42),
+                prompt_dir=config.get("prompt_dir"),
+            )
+            gating_path = gating_output_dir
+        else:
+            if gating_exists:
+                logger.info("Gating network already exists, skipping gating network training")
             else:
-                model_key = config["model"]
-                finetuned_model_path = MODELS_DIR / MODEL_CONFIGS[model_key]["finetuned_dir"]
+                logger.info("Skipping gating network training (--skip-gating flag)")
+            gating_path = gating_output_dir
         
-        # Step 2: Conversion
-        if not args.skip_convert and finetuned_model_path and finetuned_model_path.exists():
-            gguf_file_path = run_convert(config, finetuned_model_path)
+        merge_config = config.get("merge", {})
+        if merge_config.get("use_shared_expert", False):
+            shared_gating_exists = gating_output_dir.exists() and (gating_output_dir / "shared_expert_gating.pt").exists()
+            
+            if not args.skip_gating and not shared_gating_exists:
+                logger.info(f"=" * 60)
+                logger.info("Training shared expert gating network")
+                logger.info(f"=" * 60)
+                train_shared_expert_gating(
+                    base_model=base_model_path,
+                    datasets=datasets,
+                    output_dir=gating_output_dir,
+                    learning_rate=gating_config.get("learning_rate", 1e-4),
+                    batch_size=gating_config.get("batch_size", 32),
+                    num_epochs=gating_config.get("num_epochs", 10),
+                    weight_decay=gating_config.get("weight_decay", 0.01),
+                    train_split=gating_config.get("train_split", 0.7),
+                    val_split=gating_config.get("val_split", 0.15),
+                    test_split=gating_config.get("test_split", 0.15),
+                    seed=config.get("seed", 42),
+                    prompt_dir=config.get("prompt_dir"),
+                )
+            else:
+                if shared_gating_exists:
+                    logger.info("Shared expert gating network already exists, skipping shared expert gating training")
+                else:
+                    logger.info("Skipping shared expert gating network training (--skip-gating flag)")
+        
+        if not args.skip_merge:
+            logger.info(f"=" * 60)
+            logger.info("Merging expert models into MoE")
+            logger.info(f"=" * 60)
+            merge_config = config.get("merge", {})
+            rmoe_output_dir = work_dir / "rmoe_model"
+            rmoe_output_dir = merge_experts(
+                expert_paths=expert_paths,
+                gating_model_path=gating_path,
+                output_dir=rmoe_output_dir,
+                base_model_path=base_model_path,
+                routing_mode=merge_config.get("routing_mode", "weighted_sum"),
+                target_architecture=merge_config.get("target_architecture", "auto"),
+                use_shared_expert=merge_config.get("use_shared_expert", False),
+                shared_expert_path=merge_config.get("shared_expert_path"),
+            )
+            rmoe_path = rmoe_output_dir
+            logger.info(f"MoE model (rmoe_model) created at: {rmoe_path}")
         else:
-            logger.info("Skipping conversion step")
-            # Try to infer path from config
-            if config.get("gguf_output"):
-                gguf_file_path = Path(config["gguf_output"])
+            logger.info("Skipping model merging (--skip-merge flag)")
+            rmoe_path = work_dir / "rmoe_model"
+            if not rmoe_path.exists():
+                logger.warning(f"rmoe_model directory does not exist at {rmoe_path}. Finetuning will fail if enabled.")
         
-        # Step 3: Push to device
-        if not args.skip_push:
-            run_push(config, gguf_file_path)
+        if not args.skip_finetune:
+            finetune_config = config.get("full_finetune", {})
+            if finetune_config.get("enabled", False):
+                logger.info(f"=" * 60)
+                logger.info("Full finetuning (all layers unfrozen)")
+                logger.info(f"=" * 60)
+                datasets = config.get("datasets", ["truthfulqa", "longbench"])
+                model, tokenizer = load_model_and_tokenizer(model_path=rmoe_path, dtype=torch.float32)
+                use_mps = torch.backends.mps.is_available()
+                use_cuda = torch.cuda.is_available()
+                device = torch.device("cuda" if use_cuda else "mps" if use_mps else "cpu")
+                
+                if use_cuda:
+                    torch.cuda.empty_cache()
+                    logger.info(f"GPU memory: {torch.cuda.memory_allocated() / 1024**3:.2f} GB / {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+                model = model.to(device)
+                for param in model.parameters():
+                    param.requires_grad = True
+                if hasattr(model, "gradient_checkpointing_enable"):
+                    model.gradient_checkpointing_enable()
+                    logger.info("Gradient checkpointing enabled")
+                
+                model.train()
+                train_datasets = []
+                for dataset_name in datasets:
+                    if dataset_name == "truthfulqa":
+                        ds = prepare_truthfulqa_dataset(tokenizer, max_length=finetune_config.get("max_length", 512), keep_metadata=False, model_type="causal")
+                    elif dataset_name in ["longbench", "qmsum"]:
+                        ds = prepare_qmsum_dataset(tokenizer, max_length=finetune_config.get("max_length", 512), keep_metadata=False, model_type="causal")
+                    else:
+                        continue
+                    train_datasets.append(ds)
+                combined_dataset = concatenate_datasets(train_datasets)
+                combined_dataset = combined_dataset.train_test_split(test_size=finetune_config.get("eval_split", 0.2), seed=config.get("seed", 42))
+                logger.info(f"Train samples: {len(combined_dataset['train'])}, Eval samples: {len(combined_dataset['test'])}")
+                output_dir = work_dir / "rmoe_model_finetuned"
+                output_dir.mkdir(parents=True, exist_ok=True)
+                training_args = TrainingArguments(
+                    output_dir=str(output_dir),
+                    overwrite_output_dir=True,
+                    num_train_epochs=finetune_config.get("num_epochs", 3),
+                    per_device_train_batch_size=finetune_config.get("batch_size", 1),
+                    per_device_eval_batch_size=finetune_config.get("batch_size", 1),
+                    gradient_accumulation_steps=finetune_config.get("gradient_accumulation_steps", 4),
+                    learning_rate=finetune_config.get("learning_rate", 5e-5),
+                    weight_decay=finetune_config.get("weight_decay", 0.01),
+                    logging_dir=str(output_dir / "logs"),
+                    logging_steps=1,
+                    eval_strategy="epoch",
+                    save_strategy="epoch",
+                    save_total_limit=2,
+                    load_best_model_at_end=True,
+                    metric_for_best_model="eval_loss",
+                    greater_is_better=False,
+                    fp16=use_cuda,
+                    bf16=use_mps,
+                    dataloader_num_workers=0 if use_mps else 2,
+                    report_to=["tensorboard"],
+                    seed=config.get("seed", 42),
+                    gradient_checkpointing=True,
+                    dataloader_pin_memory=False,
+                )
+                data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+                trainer = Trainer(
+                    model=model,
+                    args=training_args,
+                    train_dataset=combined_dataset["train"],
+                    eval_dataset=combined_dataset["test"],
+                    data_collator=data_collator,
+                    tokenizer=tokenizer,
+                )
+                logger.info("Starting full finetuning...")
+                trainer.train()
+                logger.info(f"Saving finetuned model to: {output_dir}")
+                trainer.save_model()
+                tokenizer.save_pretrained(str(output_dir))
+                final_model_path = output_dir
+            else:
+                logger.info("Skipping full finetuning (enabled=False in config)")
+                final_model_path = rmoe_path
         else:
-            logger.info("Skipping push step")
-        
+            logger.info("Skipping full finetuning (--skip-finetune flag)")
+            final_model_path = rmoe_path
+        if not args.skip_convert:
+            logger.info(f"=" * 60)
+            logger.info("Converting to GGUF")
+            logger.info(f"=" * 60)
+            logger.info(f"Conversion mode: {args.conversion_mode}")
+            quantize_level = config.get("quantize", QUANTIZE_LEVEL)
+            if args.conversion_mode == "preserve_moe":
+                logger.info("Using PRESERVE_MOE mode - keeping all experts!")
+                from rmoe.moemodel import MoEModel
+                logger.info("Loading MoE model...")
+                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                merge_cfg = config.get("merge", {})
+                moe_model = MoEModel(
+                    expert_paths=[str(p) for p in expert_paths],
+                    gating_model_path=str(gating_path),
+                    base_model_path=base_model_path,
+                    routing_mode=merge_cfg.get("routing_mode", "weighted_sum"),
+                    device=device,
+                    target_architecture=merge_cfg.get("target_architecture", "auto"),
+                    use_shared_expert=merge_cfg.get("use_shared_expert", False),
+                    shared_expert_path=merge_cfg.get("shared_expert_path"),
+                )
+                qwen3_format_dir = work_dir / "rmoe_qwen3_format"
+                arch_name = moe_model.target_architecture.upper()
+                logger.info(f"Saving in {arch_name} format: {qwen3_format_dir}")
+                moe_model.save_pretrained(qwen3_format_dir)
+                if config.get("gguf_output"):
+                    output_file = Path(config["gguf_output"])
+                else:
+                    quantize_map = {"Q4_0": "f16", "Q8_0": "q8_0"}
+                    outtype = quantize_map.get(quantize_level, quantize_level)
+                    output_file = work_dir / f"rmoe_model_moe_{outtype}.gguf"
+                output_file.parent.mkdir(parents=True, exist_ok=True)
+                logger.info(f"Converting: {qwen3_format_dir}")
+                logger.info(f"Output: {output_file}")
+                logger.info(f"Quantization: {quantize_level}")
+                convert_to_gguf(qwen3_format_dir, output_file, quantize_level)
+                logger.info(f"✓ MoE-preserved GGUF saved to: {output_file}")
+                logger.info(f"✓ All {len(expert_paths)} experts preserved with routing!")
+                
+            else:
+                logger.info("Using AVERAGE mode - merging all experts to standard MLP")
+                if config.get("gguf_output"):
+                    output_file = Path(config["gguf_output"])
+                else:
+                    quantize = config.get("quantize", QUANTIZE_LEVEL)
+                    output_file = work_dir / f"rmoe_model_{quantize}.gguf"
+                output_file.parent.mkdir(parents=True, exist_ok=True)
+                logger.info(f"Converting: {final_model_path}")
+                logger.info(f"Output: {output_file}")
+                logger.info(f"Quantization: {quantize_level}")
+                standard_model_path = work_dir / "rmoe_standard"
+                logger.info(f"Merging experts to standard MLP: {standard_model_path}")
+                merge_experts_to_standard_mlp(Path(final_model_path), standard_model_path, merge_mode="average")
+                convert_to_gguf(standard_model_path, output_file, quantize_level)
+                logger.info(f"✓ Standard GGUF saved to: {output_file}")
+        else:
+            logger.info("Skipping GGUF conversion")
         logger.info("=" * 60)
-        logger.info("Pipeline complete!")
+        logger.info("PIPELINE COMPLETE!")
         logger.info("=" * 60)
-        if finetuned_model_path:
-            logger.info(f"Fine-tuned model: {finetuned_model_path}")
-        if gguf_file_path:
-            logger.info(f"GGUF file: {gguf_file_path}")
-        
+        logger.info(f"Work directory: {work_dir}")
+        if not args.skip_convert:
+            logger.info(f"Conversion mode: {args.conversion_mode}")
+            if args.conversion_mode == "preserve_moe":
+                logger.info(f"  ✓ MoE structure preserved ({len(expert_paths)} experts with routing)")
+                arch_display = config.get("merge", {}).get("target_architecture", "auto").upper()
+                logger.info(f"  {arch_display} format: {work_dir / 'rmoe_qwen3_format'}")
+            else:
+                logger.info(f"  ✓ Experts averaged into single model")
+                logger.info(f"  Standard format: {work_dir / 'rmoe_standard'}")
+        logger.info("=" * 60)
     except Exception as e:
         logger.error(f"Pipeline failed: {e}", exc_info=True)
         sys.exit(1)
 
-
 if __name__ == "__main__":
     main()
-

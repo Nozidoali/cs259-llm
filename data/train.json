@@ -1,0 +1,21 @@
+{
+    "model": "qwen2-0.5b",
+    "model_path": null,
+    "output_dir": null,
+    "max_length": 512,
+    "num_epochs": 3,
+    "batch_size": 1,
+    "gradient_accumulation_steps": 4,
+    "learning_rate": 5e-5,
+    "weight_decay": 0.01,
+    "eval_split": 0.2,
+    "seed": 42,
+    "use_bleurt": false,
+    "quantize": "Q4_0",
+    "gguf_output": null,
+    "push_to_device": true,
+    "device_path": "/data/local/tmp/gguf/",
+    "adb_serial": null
+}
+
+

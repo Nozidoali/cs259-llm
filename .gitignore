@@ -6,11 +6,15 @@ models/
 *.pt
 *.pth
 
-# Data
-data/
+
 *.csv
 *.json
+!data/*.json
+
 *.parquet
+
+data/gating_cache/
+data/truthfulqa_cache/
 
 # Hugging Face cache
 .cache/
@@ -60,7 +64,13 @@ wandb/
 
 prompt_files/
 qmsum_outputs/
+tmp/
 
 
 
+workspace/
 
+downloaded_models/
+
+# benchmark results
+benchmark_results/

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import os
 import json
 import argparse
@@ -9,12 +10,9 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from truthfulqa import get_truthfulqa_score
-from longbench import get_longbench_score
-from throughput import get_throughput
+from evaluation import get_truthfulqa_score, get_longbench_score, get_throughput
 from config import EVALUATION_CONFIG, LOGS_DIR
 
-# Generate datetime string for log filename
 datetime_str = datetime.now().strftime('%Y%m%d_%H%M%S')
 log_file = LOGS_DIR / f"test_{datetime_str}.log"
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -29,51 +27,52 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-def build_cli_args(config):
-    args = []
-    
+def main():
+    parser = argparse.ArgumentParser(description="Run evaluation experiments with config")
+    parser.add_argument("config", help="Path to JSON config file")
+    parser.add_argument("--output-dir", default="./results", help="Output directory for results (default: ./results)")
+    args = parser.parse_args()
+    if not os.path.exists(args.config):
+        logger.error(f"Config file not found: {args.config}")
+        sys.exit(1)
+    with open(args.config, "r") as f:
+        config = json.load(f)
+    os.makedirs(args.output_dir, exist_ok=True)
+    logger.info(f"Starting experiment with config: {args.config}")
+    cli_args = []
     if config.get("threads"):
-        args.extend(["-t", str(config["threads"])])
+        cli_args.extend(["-t", str(config["threads"])])
     if config.get("ctx_size"):
-        args.extend(["--ctx-size", str(config["ctx_size"])])
+        cli_args.extend(["--ctx-size", str(config["ctx_size"])])
     if config.get("batch_size"):
-        args.extend(["--batch-size", str(config["batch_size"])])
+        cli_args.extend(["--batch-size", str(config["batch_size"])])
     if config.get("kv_cache_token_quant"):
-        args.extend(["-ctk", config["kv_cache_token_quant"]])
+        cli_args.extend(["-ctk", config["kv_cache_token_quant"]])
     if config.get("kv_cache_value_quant"):
-        args.extend(["-ctv", config["kv_cache_value_quant"]])
+        cli_args.extend(["-ctv", config["kv_cache_value_quant"]])
     if config.get("temperature"):
-        args.extend(["--temp", str(config["temperature"])])
+        cli_args.extend(["--temp", str(config["temperature"])])
     if config.get("seed"):
-        args.extend(["--seed", str(config["seed"])])
+        cli_args.extend(["--seed", str(config["seed"])])
     if config.get("n_gpu_layers"):
-        args.extend(["-ngl", str(config["n_gpu_layers"])])
-    
-    # Long context optimization options
+        cli_args.extend(["-ngl", str(config["n_gpu_layers"])])
     if config.get("rope_scale"):
-        args.extend(["--rope-scale", str(config["rope_scale"])])
+        cli_args.extend(["--rope-scale", str(config["rope_scale"])])
     if config.get("rope_freq_base"):
-        args.extend(["--rope-freq-base", str(config["rope_freq_base"])])
+        cli_args.extend(["--rope-freq-base", str(config["rope_freq_base"])])
     if config.get("rope_freq_scale"):
-        args.extend(["--rope-freq-scale", str(config["rope_freq_scale"])])
+        cli_args.extend(["--rope-freq-scale", str(config["rope_freq_scale"])])
     if config.get("no_mmap"):
-        args.append("--no-mmap")
+        cli_args.append("--no-mmap")
     if config.get("no_kv_offload"):
-        args.append("--no-kv-offload")
+        cli_args.append("--no-kv-offload")
     if config.get("kv_offload"):
-        args.append("--kv-offload")
+        cli_args.append("--kv-offload")
     if config.get("flash_attn") is False:
-        args.append("--no-flash")
+        cli_args.append("--no-flash")
     elif config.get("flash_attn") is True:
-        args.extend(["-fa", "on"])
-    
-    return args
-
-
-def build_env_vars(config):
+        cli_args.extend(["-fa", "on"])
     env_vars = {}
-    
     if config.get("verbose") is not None:
         env_vars["V"] = str(config["verbose"])
     if config.get("experimental") is not None:
@@ -95,33 +94,17 @@ def build_env_vars(config):
     if config.get("model") is not None:
         env_vars["M"] = config["model"]
     if config.get("device") is not None:
-        env_vars["D"] = config["device"]
-    
-    return env_vars
-
-
-def run_experiment(config_path, output_dir="./results"):
-    with open(config_path, "r") as f:
-        config = json.load(f)
-    
-    os.makedirs(output_dir, exist_ok=True)
-    logger.info(f"Starting experiment with config: {config_path}")
-    
-    cli_args = build_cli_args(config)
-    env_vars = build_env_vars(config)
-    
+        env_vars["D"] = str(config["device"])
     original_env = {}
     for key, value in env_vars.items():
         if value is not None:
             original_env[key] = os.environ.get(key)
             os.environ[key] = str(value)
-    
     results = {
         "config": config,
         "timestamp": datetime.now().isoformat(),
         "results": {}
     }
-    
     logger.info("Running TruthfulQA evaluation...")
     try:
         max_bleurt, accuracy = get_truthfulqa_score(
@@ -131,15 +114,18 @@ def run_experiment(config_path, output_dir="./results"):
             random_seed=config.get("seed", 42),
             extra_args=cli_args
         )
-        results["results"]["truthfulqa"] = {
-            "max_bleurt_score": max_bleurt,
-            "accuracy": accuracy
-        }
-        logger.info(f"TruthfulQA - Max BLEURT: {max_bleurt:.4f}, Accuracy: {accuracy:.4f}")
+        if max_bleurt is None or accuracy is None:
+            logger.error("TruthfulQA evaluation failed - CLI returned error")
+            results["results"]["truthfulqa"] = {"error": "CLI execution failed"}
+        else:
+            results["results"]["truthfulqa"] = {
+                "max_bleurt_score": max_bleurt,
+                "accuracy": accuracy
+            }
+            logger.info(f"TruthfulQA - Max BLEURT: {max_bleurt:.4f}, Accuracy: {accuracy:.4f}")
     except Exception as e:
         logger.error(f"Error running TruthfulQA: {e}", exc_info=True)
         results["results"]["truthfulqa"] = {"error": str(e)}
-    
     logger.info("Running throughput benchmark...")
     try:
         bench_metrics = get_throughput(script_path="./scripts/run-bench.sh", config=config)
@@ -155,7 +141,6 @@ def run_experiment(config_path, output_dir="./results"):
     except Exception as e:
         logger.error(f"Error running throughput: {e}", exc_info=True)
         results["results"]["throughput"] = {"error": str(e)}
-    
     logger.info("Running LongBench evaluation...")
     try:
         rougeL = get_longbench_score(
@@ -173,13 +158,10 @@ def run_experiment(config_path, output_dir="./results"):
     except Exception as e:
         logger.error(f"Error running LongBench: {e}", exc_info=True)
         results["results"]["longbench"] = {"error": str(e)}
-    
     output_filename = f"result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    output_path = os.path.join(output_dir, output_filename)
-    
+    output_path = os.path.join(args.output_dir, output_filename)
     with open(output_path, "w") as f:
         json.dump(results, f, indent=2)
-    
     for key in env_vars.keys():
         if key in original_env:
             if original_env[key] is not None:
@@ -188,25 +170,7 @@ def run_experiment(config_path, output_dir="./results"):
                 del os.environ[key]
         elif key in os.environ:
             del os.environ[key]
-    
     logger.info(f"Results saved to: {output_path}")
-    return results
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Run evaluation experiments with config")
-    parser.add_argument("config", help="Path to JSON config file")
-    parser.add_argument("--output-dir", default="./results", help="Output directory for results (default: ./results)")
-    
-    args = parser.parse_args()
-    
-    if not os.path.exists(args.config):
-        logger.error(f"Config file not found: {args.config}")
-        sys.exit(1)
-    
-    run_experiment(args.config, args.output_dir)
-
 
 if __name__ == "__main__":
     main()
-

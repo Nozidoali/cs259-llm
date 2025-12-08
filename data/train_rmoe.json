@@ -1,0 +1,52 @@
+{
+    "method": "rmoe",
+    "base_model": "qwen2-0.5b",
+    "datasets": [
+        "truthfulqa",
+        "longbench"
+    ],
+    "seed": 42,
+    "expert_training": {
+        "max_length": 512,
+        "num_epochs": 20,
+        "batch_size": 1,
+        "gradient_accumulation_steps": 4,
+        "learning_rate": 1e-5,
+        "weight_decay": 0.01,
+        "l2_regularization": 1e-4,
+        "max_grad_norm": 1.0,
+        "disable_eval_split": true,
+        "eval_split": 0.2,
+        "qmsum_max_new_tokens": 200,
+        "temperature": 0.5
+    },
+    "gating": {
+        "hidden_dims": [
+            512,
+            256
+        ],
+        "dropout": 0.1,
+        "learning_rate": 1e-4,
+        "batch_size": 32,
+        "num_epochs": 10,
+        "weight_decay": 0.01,
+        "train_split": 0.7,
+        "val_split": 0.15,
+        "test_split": 0.15
+    },
+    "merge": {
+        "routing_mode": "weighted_sum"
+    },
+    "full_finetune": {
+        "enabled": true,
+        "max_length": 512,
+        "num_epochs": 3,
+        "batch_size": 1,
+        "gradient_accumulation_steps": 4,
+        "learning_rate": 5e-5,
+        "weight_decay": 0.01,
+        "eval_split": 0.2
+    },
+    "quantize": "q8_0",
+    "gguf_output": null
+}

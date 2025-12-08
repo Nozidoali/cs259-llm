@@ -16,12 +16,17 @@ hf_transfer
 evaluate>=0.4.0
 rouge_score
 nltk
+tensorboard>=2.13.0
 
 # Utilities
 python-dotenv>=1.0.0
 sentencepiece
 protobuf
 scikit-learn
+safetensors>=0.3.0
+
+# GGUF conversion via llama.cpp submodule (no package needed)
+# The convert_hf_to_gguf.py script from llama.cpp will be used directly
 
 # TensorFlow and Keras (for BLEURT)
 tensorflow

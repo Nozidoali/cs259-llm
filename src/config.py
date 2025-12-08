@@ -7,17 +7,10 @@ load_dotenv(dotenv_path=BASE_DIR / ".env")
 work_dir_env = os.getenv("WORK_DIR", "").strip()
 WORK_DIR = Path(work_dir_env) if work_dir_env else Path.cwd()
 llama_cpp_env = os.getenv("LLAMA_CPP_DIR", "").strip()
-LLAMA_CPP_DIR = Path(llama_cpp_env) if llama_cpp_env else Path("/Users/hanyu/Documents/llama.cpp")
+LLAMA_CPP_DIR = Path(llama_cpp_env) if llama_cpp_env else BASE_DIR / "external" / "llama.cpp"
 
 if not WORK_DIR.exists() or not WORK_DIR.is_dir():
     raise ValueError(f"WORK_DIR does not exist or is not a directory: {WORK_DIR}")
-
-# if not LLAMA_CPP_DIR.exists() or not LLAMA_CPP_DIR.is_dir():
-#     raise ValueError(f"LLAMA_CPP_DIR does not exist or is not a directory: {LLAMA_CPP_DIR}")
-
-convert_script = LLAMA_CPP_DIR / "convert_hf_to_gguf.py"
-# if not convert_script.exists():
-#     raise ValueError(f"convert_hf_to_gguf.py not found in LLAMA_CPP_DIR: {LLAMA_CPP_DIR}")
 
 MODELS_DIR = WORK_DIR / "models"
 GGUF_OUTPUT_DIR = MODELS_DIR / "gguf"
@@ -32,6 +25,14 @@ MODEL_CONFIGS = {
         "base_dir": "qwen2-0.5b-instruct",
         "finetuned_dir": "qwen2-0.5b-instruct-finetuned",
         "display_name": "Qwen2 0.5B Instruct",
+        "model_type": "causal",
+        "supports_gguf": True,
+    },
+    "qwen2.5-0.5b": {
+        "model_id": "Qwen/Qwen2.5-0.5B-Instruct",
+        "base_dir": "qwen2.5-0.5b-instruct",
+        "finetuned_dir": "qwen2.5-0.5b-instruct-finetuned",
+        "display_name": "Qwen2.5 0.5B Instruct",
         "model_type": "causal",
         "supports_gguf": True,
     },
@@ -59,6 +60,14 @@ MODEL_CONFIGS = {
         "model_type": "causal",
         "supports_gguf": True,
     },
+    "llama3.2-1b": {
+        "model_id": "meta-llama/Llama-3.2-1B-Instruct",
+        "base_dir": "llama3.2-1b-instruct",
+        "finetuned_dir": "llama3.2-1b-instruct-finetuned",
+        "display_name": "Llama 3.2 1B Instruct",
+        "model_type": "causal",
+        "supports_gguf": True,
+    },
 }
 
 TRAINING_CONFIG = {
@@ -74,8 +83,9 @@ TRAINING_CONFIG = {
 
 BLEURT_CONFIG = {
     "model_name": "bleurt-large-128",
-    "max_new_tokens": 50,
+    "max_new_tokens": 20,
     "prompt_template": "Question: {question}\nAnswer:",
+    "repetition_penalty": 1.2,  # Penalize repetition (1.0 = no penalty, higher = more penalty)
 }
 
 DATASET_CONFIG = {
@@ -93,20 +103,27 @@ EVALUATION_CONFIG = {
 }
 
 GATING_CONFIG = {
-    "base_model": "qwen2-0.5b",  # Default base model for embeddings
-    "hidden_dims": [512, 256],  # MLP hidden layer dimensions
-    "dropout": 0.1,  # Dropout rate
-    "learning_rate": 1e-4,  # Learning rate for gating network training
-    "batch_size": 32,  # Batch size for training
-    "num_epochs": 10,  # Number of training epochs
-    "weight_decay": 0.01,  # Weight decay
-    "train_split": 0.7,  # Training split
-    "val_split": 0.15,  # Validation split
-    "test_split": 0.15,  # Test split
-    "seed": 42,  # Random seed
+    "base_model": "qwen2-0.5b",
+    "hidden_dims": [512, 256],
+    "dropout": 0.1,
+    "learning_rate": 1e-4,
+    "batch_size": 32,
+    "num_epochs": 10,
+    "weight_decay": 0.01,
+    "train_split": 0.7,
+    "val_split": 0.15,
+    "test_split": 0.15,
+    "seed": 42,
 }
 
 GATING_MODEL_DIR = MODELS_DIR / "gating-network"
+
+MOE_CONFIG = {
+    "model1_path": None,
+    "model2_path": None,
+    "gating_model_path": None,
+    "routing_mode": "weighted_sum",
+}
 
 for dir_path in [MODELS_DIR, GGUF_OUTPUT_DIR, DATA_DIR, TRUTHFULQA_CACHE_DIR, LOGS_DIR, GATING_MODEL_DIR]:
     dir_path.mkdir(parents=True, exist_ok=True)
