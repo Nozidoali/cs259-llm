@@ -1,4 +1,4 @@
-# CUDA Conflict Fix for H100/A100 Servers
+# H100 GPU Training Configuration
 
 ## Problem
 When running training on GPU servers (H100, A100, etc.), TensorFlow (used by BLEURT for evaluation) was initializing CUDA before PyTorch, causing conflicts and the error:
@@ -7,31 +7,43 @@ CUDA error: Failed call to cuInit: CUDA_ERROR_UNKNOWN: unknown error
 ```
 
 ## Solution
-The fix ensures that TensorFlow uses **CPU only** while PyTorch has exclusive access to the GPU for training.
+The fix ensures that **PyTorch initializes CUDA FIRST** and claims the H100 GPU for training, while TensorFlow uses CPU only for BLEURT evaluation.
 
-**Key Insight:** We use TensorFlow's Python API (`tf.config.set_visible_devices([], 'GPU')`) to hide GPUs from TensorFlow instead of modifying `CUDA_VISIBLE_DEVICES` environment variable, which would confuse PyTorch after it has already initialized.
+**Key Strategy:**
+1. **PyTorch initializes CUDA immediately** when train.py starts - claims H100 GPU
+2. **TensorFlow is configured via Python API** (`tf.config.set_visible_devices([], 'GPU')`) to use CPU only
+3. **Warnings are NOT suppressed** - you can see the full status of GPU initialization
+4. **No environment variable modification after import** - prevents PyTorch confusion
 
 ## Changes Made
 
-### 1. `train.py` - Suppress TensorFlow Warnings
-Added environment variable to suppress TensorFlow logging:
+### 1. `train.py` - PyTorch CUDA Initialization First
+Added immediate PyTorch CUDA initialization at the top of the file:
 ```python
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-```
+import torch
 
-### 2. `src/rmoe/trainer.py` - BLEURT Loading Fix
-Updated the BLEURT loading to force TensorFlow to use CPU via Python API:
+# Initialize PyTorch CUDA immediately to claim GPU resources
+if torch.cuda.is_available():
+    torch.cuda.init()
+    print(f"✓ PyTorch CUDA initialized: {torch.cuda.get_device_name(0)}")
+```
+This ensures PyTorch claims the H100 GPU BEFORE TensorFlow is imported.
+
+### 2. `src/rmoe/trainer.py` - BLEURT with TensorFlow CPU
+Updated BLEURT loading to use TensorFlow on CPU via Python API:
 ```python
 import tensorflow as tf
-tf.config.set_visible_devices([], 'GPU')  # Hide all GPUs from TensorFlow
+tf.config.set_visible_devices([], 'GPU')  # Hide GPUs from TensorFlow
 ```
-This ensures TensorFlow doesn't interfere with PyTorch's CUDA usage.
+Includes logging to show when BLEURT is loading and which device it uses.
 
-### 3. `src/rmoe/evaluate.py` - Evaluation Fix
-Applied the same TensorFlow Python API fix to BLEURT loading in evaluation functions.
+### 3. `src/rmoe/evaluate.py` - Evaluation with TensorFlow CPU
+Applied the same TensorFlow CPU configuration with informative logging.
 
-### 4. `src/evaluation.py` - Evaluation Fix
-Applied the same TensorFlow Python API fix to BLEURT loading in the main evaluation module.
+### 4. `src/evaluation.py` - Main Evaluation with TensorFlow CPU
+Applied the same TensorFlow CPU configuration with informative logging.
+
+### 5. **Warnings NOT suppressed** - Full visibility of GPU initialization status
 
 ### 5. `check_cuda.py` - Diagnostic Tool (NEW)
 Created a diagnostic script to verify CUDA setup before training.
@@ -105,20 +117,33 @@ If you still see CUDA errors:
 
 ## Expected Behavior
 
-✓ **Normal logs at start:**
+✓ **PyTorch CUDA initialization at start (FIRST thing you see):**
+```
+✓ PyTorch CUDA initialized: NVIDIA H100 PCIe
+✓ GPU count: 1
+✓ CUDA version: 12.1
+```
+
+✓ **Normal pipeline logs:**
 ```
 2025-12-08 11:53:29,383 - INFO - Using timestamp from WORKSPACE_TIMESTAMP environment variable: 20251208_115231
 2025-12-08 11:53:29,385 - INFO - Work directory: /workspace/cs259-llm/workspace/20251208_115231
 2025-12-08 11:53:29,386 - INFO - Training expert for dataset: truthfulqa
 ```
 
-✓ **PyTorch should detect CUDA:**
+✓ **PyTorch training on GPU:**
 ```
 Using device: cuda
-GPU memory: X.XX GB / XX.XX GB
+GPU memory: 40.00 GB / 80.00 GB
 ```
 
-✗ **No more TensorFlow CUDA errors**
+✓ **BLEURT loading (when evaluation happens):**
+```
+2025-12-08 12:00:00,000 - INFO - Loading BLEURT model (TensorFlow will use CPU for evaluation)...
+2025-12-08 12:00:05,000 - INFO - BLEURT model loaded successfully on CPU
+```
+
+✗ **No more CUDA initialization errors**
 
 ## Performance Notes
 

@@ -82,17 +82,14 @@ def get_truthfulqa_score(script_path="./scripts/run-cli.sh", num_samples=100, nu
         return None, None
     
     logger.info(f"Generated {len(all_predictions)} predictions, evaluating with BLEURT...")
+    logger.info("Loading BLEURT model (TensorFlow will use CPU for evaluation)...")
     
-    # Configure TensorFlow to use CPU only before loading BLEURT
-    # This prevents TensorFlow from interfering with PyTorch's CUDA usage
-    import os
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TensorFlow logs
-    
-    # Import and configure TensorFlow to use CPU only
+    # Configure TensorFlow to use CPU only - PyTorch is using the GPU
     import tensorflow as tf
     tf.config.set_visible_devices([], 'GPU')  # Hide all GPUs from TensorFlow
     
     bleurt = evaluate.load("bleurt", BLEURT_CONFIG["model_name"])
+    logger.info("BLEURT model loaded successfully on CPU")
     max_score_arr = []
     acc_score_arr = []
     batch_size = 32

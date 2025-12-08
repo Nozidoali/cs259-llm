@@ -7,10 +7,6 @@ Run this before starting training to ensure CUDA is properly configured.
 import os
 import sys
 
-# Force TensorFlow to use CPU before it initializes
-os.environ['CUDA_VISIBLE_DEVICES'] = ''
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
 print("=" * 80)
 print("CUDA DIAGNOSTIC TOOL")
 print("=" * 80)
@@ -54,13 +50,16 @@ print("[3/4] Checking TensorFlow (used by BLEURT)...")
 try:
     import tensorflow as tf
     print(f"  ✓ TensorFlow version: {tf.__version__}")
-    print(f"  ✓ TensorFlow will use CPU only (configured)")
-    # Test that TensorFlow sees no GPUs
-    gpus = tf.config.list_physical_devices('GPU')
+    
+    # Configure TensorFlow to use CPU only (same as in training pipeline)
+    tf.config.set_visible_devices([], 'GPU')
+    
+    # Verify that TensorFlow sees no GPUs after configuration
+    gpus = tf.config.get_visible_devices('GPU')
     if len(gpus) == 0:
         print(f"  ✓ TensorFlow correctly configured to use CPU (sees 0 GPUs)")
     else:
-        print(f"  ⚠ Warning: TensorFlow sees {len(gpus)} GPU(s), but should use CPU only")
+        print(f"  ⚠ Warning: TensorFlow sees {len(gpus)} GPU(s) after configuration")
 except Exception as e:
     print(f"  ⚠ TensorFlow check failed (this is OK if BLEURT is not used): {e}")
 

@@ -10,17 +10,15 @@ def evaluate_truthfulqa(model, tokenizer, dataset, device=None, temperature=0.0)
     if device is None:
         device = next(model.parameters()).device
     
-    # Configure TensorFlow to use CPU only before loading BLEURT
-    # This prevents TensorFlow from interfering with PyTorch's CUDA usage
-    import os
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TensorFlow logs
+    logger.info("Loading BLEURT model for TruthfulQA evaluation...")
     
-    # Import and configure TensorFlow to use CPU only
+    # Configure TensorFlow to use CPU only - PyTorch is using the GPU
     import tensorflow as tf
     tf.config.set_visible_devices([], 'GPU')  # Hide all GPUs from TensorFlow
     
     import evaluate
     bleurt = evaluate.load("bleurt", BLEURT_CONFIG["model_name"])
+    logger.info("BLEURT model loaded successfully on CPU")
     # Use CPU for generation if device is MPS to avoid compatibility issues
     gen_device = torch.device("cpu") if device.type == "mps" else device
     # Move model to generation device once if needed

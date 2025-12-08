@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 
 import os
-
-# Suppress TensorFlow warnings (TensorFlow will be configured to use CPU via Python API when loaded)
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-
 import json
 import argparse
 import sys
@@ -12,7 +8,25 @@ import logging
 import gc
 from pathlib import Path
 from datetime import datetime
+
+# Import PyTorch and initialize CUDA FIRST before any TensorFlow imports
 import torch
+
+# Initialize PyTorch CUDA immediately to claim GPU resources
+if torch.cuda.is_available():
+    # This forces PyTorch to initialize CUDA and claim the GPU
+    torch.cuda.init()
+    print(f"✓ PyTorch CUDA initialized: {torch.cuda.get_device_name(0)}")
+    print(f"✓ GPU count: {torch.cuda.device_count()}")
+    print(f"✓ CUDA version: {torch.version.cuda}")
+else:
+    print("⚠ WARNING: CUDA not available for PyTorch. Training will be very slow on CPU.")
+
+# Now configure TensorFlow to use CPU only (before TensorFlow is imported)
+# We do this AFTER PyTorch has claimed the GPU
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # Show warnings but not info logs
+os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "false"  # Don't let TF allocate all GPU memory
+
 from transformers import TrainingArguments, DataCollatorForLanguageModeling, Trainer
 from datasets import concatenate_datasets
 
