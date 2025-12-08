@@ -82,7 +82,21 @@ def get_truthfulqa_score(script_path="./scripts/run-cli.sh", num_samples=100, nu
         return None, None
     
     logger.info(f"Generated {len(all_predictions)} predictions, evaluating with BLEURT...")
+    
+    # Configure TensorFlow to use CPU only before loading BLEURT
+    # This prevents TensorFlow from interfering with PyTorch's CUDA usage
+    import os
+    original_cuda_visible = os.environ.get('CUDA_VISIBLE_DEVICES')
+    os.environ['CUDA_VISIBLE_DEVICES'] = ''  # Force TensorFlow to use CPU only
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TensorFlow logs
+    
     bleurt = evaluate.load("bleurt", BLEURT_CONFIG["model_name"])
+    
+    # Restore CUDA_VISIBLE_DEVICES for PyTorch
+    if original_cuda_visible is not None:
+        os.environ['CUDA_VISIBLE_DEVICES'] = original_cuda_visible
+    else:
+        os.environ.pop('CUDA_VISIBLE_DEVICES', None)
     max_score_arr = []
     acc_score_arr = []
     batch_size = 32

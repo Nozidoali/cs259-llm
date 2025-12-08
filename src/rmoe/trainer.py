@@ -42,17 +42,31 @@ class MultiDatasetEvalTrainer(Trainer):
         if self._bleurt is None:
             import os
             import logging
+            
+            # Save original TensorFlow environment variables
             tf_log_level = os.environ.get('TF_CPP_MIN_LOG_LEVEL', '')
-            os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress INFO and WARNING
+            original_cuda_visible = os.environ.get('CUDA_VISIBLE_DEVICES')
+            
+            # Configure TensorFlow to use CPU only and suppress logs
+            # This prevents TensorFlow (used by BLEURT) from interfering with PyTorch's CUDA usage
+            os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress all TF logs
+            os.environ['CUDA_VISIBLE_DEVICES'] = ''  # Force TensorFlow to use CPU only
             logging.getLogger('tensorflow').setLevel(logging.ERROR)
             
             import evaluate
             self._bleurt = evaluate.load("bleurt", BLEURT_CONFIG["model_name"])
             
+            # Restore original environment variables
             if tf_log_level:
                 os.environ['TF_CPP_MIN_LOG_LEVEL'] = tf_log_level
             else:
                 os.environ.pop('TF_CPP_MIN_LOG_LEVEL', None)
+            
+            if original_cuda_visible is not None:
+                os.environ['CUDA_VISIBLE_DEVICES'] = original_cuda_visible
+            else:
+                os.environ.pop('CUDA_VISIBLE_DEVICES', None)
+                
         return self._bleurt
     
     @property

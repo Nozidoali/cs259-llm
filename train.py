@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 
 import os
+
+# CRITICAL: Set these BEFORE any other imports to prevent TensorFlow/JAX from grabbing CUDA
+# This fixes CUDA conflicts on GPU servers (H100, A100, etc.)
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # Suppress TensorFlow warnings
+os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"  # Prevent TF from allocating all GPU memory
+# Force TensorFlow to use CPU only - PyTorch will use GPU
+os.environ["CUDA_VISIBLE_DEVICES_FOR_TF"] = ""  # Custom var to document intent
+# The actual disabling happens below after we check if CUDA should be used
+
 import json
 import argparse
 import sys
@@ -25,11 +35,6 @@ from rmoe.finetune import train_expert
 from rmoe.gating import train_gating_network, train_shared_expert_gating
 from rmoe.merge import merge_experts
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler()]
-)
 logger = logging.getLogger(__name__)
 
 def main():
@@ -76,21 +81,45 @@ Examples:
     
     # Get timestamp from environment variable or generate one
     timestamp = os.getenv("WORKSPACE_TIMESTAMP")
+    timestamp_from_env = timestamp is not None
     if not timestamp:
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    work_dir = WORK_DIR / "workspace" / timestamp
+    work_dir.mkdir(parents=True, exist_ok=True)
+    log_file = work_dir / "pipeline.log"
+    
+    # Configure root logger to write to both console and file
+    # All child loggers will inherit these handlers
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    
+    # Clear any existing handlers
+    root_logger.handlers.clear()
+    
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    root_logger.addHandler(console_handler)
+    
+    # File handler
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    root_logger.addHandler(file_handler)
+    
+    if not timestamp_from_env:
         logger.warning(f"WORKSPACE_TIMESTAMP environment variable is not set. Auto-generated timestamp: {timestamp}")
     else:
         if len(timestamp) != 15 or timestamp[8] != '_':
             logger.warning(f"Timestamp format may be incorrect. Expected: YYYYMMDD_HHMMSS, got: {timestamp}")
         logger.info(f"Using timestamp from WORKSPACE_TIMESTAMP environment variable: {timestamp}")
-    work_dir = WORK_DIR / "workspace" / timestamp
-    work_dir.mkdir(parents=True, exist_ok=True)
-    log_file = work_dir / "train.log"
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-    logger.addHandler(file_handler)
+    
+    logger.info("=" * 80)
+    logger.info(f"Pipeline started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info(f"Work directory: {work_dir}")
+    logger.info(f"All pipeline logs will be saved to: {log_file}")
+    logger.info("=" * 80)
     base_model = config.get("base_model", "qwen2-0.5b")
     from config import MODEL_CONFIGS
     if base_model in MODEL_CONFIGS:
@@ -372,10 +401,25 @@ Examples:
                 logger.info(f"✓ Standard GGUF saved to: {output_file}")
         else:
             logger.info("Skipping GGUF conversion")
-        logger.info("=" * 60)
+        logger.info("=" * 80)
         logger.info("PIPELINE COMPLETE!")
-        logger.info("=" * 60)
+        logger.info("=" * 80)
         logger.info(f"Work directory: {work_dir}")
+        logger.info(f"All pipeline logs saved to: {work_dir / 'pipeline.log'}")
+        logger.info("")
+        logger.info("Tensorboard logs by stage:")
+        for i, dataset_name in enumerate(datasets):
+            expert_dir = work_dir / "experts" / dataset_name / "logs"
+            if expert_dir.exists():
+                logger.info(f"  Expert {i+1} ({dataset_name}): {expert_dir}")
+        
+        if (work_dir / "rmoe_model_finetuned" / "logs").exists():
+            logger.info(f"  Full fine-tuning: {work_dir / 'rmoe_model_finetuned' / 'logs'}")
+        
+        logger.info("")
+        logger.info(f"To view all tensorboard logs: tensorboard --logdir {work_dir}")
+        logger.info("")
+        
         if not args.skip_convert:
             logger.info(f"Conversion mode: {args.conversion_mode}")
             if args.conversion_mode == "preserve_moe":
@@ -384,7 +428,7 @@ Examples:
             else:
                 logger.info(f"  ✓ Experts averaged into single model")
                 logger.info(f"  Standard format: {work_dir / 'rmoe_standard'}")
-        logger.info("=" * 60)
+        logger.info("=" * 80)
     except Exception as e:
         logger.error(f"Pipeline failed: {e}", exc_info=True)
         sys.exit(1)
