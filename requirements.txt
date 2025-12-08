@@ -11,6 +11,7 @@ numpy<2.0.0
 # HuggingFace ecosystem
 huggingface_hub>=0.16.0
 hf_transfer
+peft>=0.7.0  # For LoRA training
 
 # Evaluation and metrics
 evaluate>=0.4.0

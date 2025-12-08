@@ -122,7 +122,7 @@ fi
 # Training
 ###############################
 
-python train.py data/train_rmoe.json
+python train.py data/train_rmoe_lora.json
 echo 'Training completed.'
 
 # Keep container alive

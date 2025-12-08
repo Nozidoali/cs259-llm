@@ -98,6 +98,16 @@ def main():
                 logger.info(f"Training expert for dataset: {dataset_name}")
                 logger.info(f"=" * 60)
                 expert_output_dir = work_dir / "experts" / dataset_name
+                
+                # LoRA configuration
+                lora_config = expert_config.get("lora", {})
+                use_lora = lora_config.get("enabled", True)
+                
+                if use_lora:
+                    logger.info("LoRA training enabled for expert")
+                else:
+                    logger.info("Full MLP fine-tuning (no LoRA)")
+                
                 expert_output_dir = train_expert(
                     base_model_path=base_model_path,
                     dataset_name=dataset_name,
@@ -116,6 +126,11 @@ def main():
                     seed=config.get("seed", 42),
                     qmsum_max_new_tokens=expert_config.get("qmsum_max_new_tokens", 200),
                     temperature=expert_config.get("temperature", 0.0),
+                    use_lora=use_lora,
+                    lora_r=lora_config.get("r", 8),
+                    lora_alpha=lora_config.get("alpha", 16),
+                    lora_dropout=lora_config.get("dropout", 0.05),
+                    lora_target_modules=lora_config.get("target_modules", None),
                 )
                 expert_paths.append(expert_output_dir)
         else:
@@ -126,6 +141,21 @@ def main():
             else:
                 logger.info("Skipping expert training (--skip-experts flag)")
             expert_paths = [work_dir / "experts" / d for d in datasets]
+        
+        # Check if experts were trained with LoRA and adjust paths to use merged models
+        lora_config = config.get("expert_training", {}).get("lora", {})
+        use_lora = lora_config.get("enabled", True)
+        if use_lora:
+            adjusted_expert_paths = []
+            for expert_path in expert_paths:
+                merged_path = expert_path / "merged"
+                if merged_path.exists() and (merged_path / "config.json").exists():
+                    logger.info(f"Using LoRA-merged model from: {merged_path}")
+                    adjusted_expert_paths.append(merged_path)
+                else:
+                    logger.warning(f"LoRA merged model not found at {merged_path}, using base path: {expert_path}")
+                    adjusted_expert_paths.append(expert_path)
+            expert_paths = adjusted_expert_paths
         gating_output_dir = work_dir / "gating_network"
         gating_exists = gating_output_dir.exists() and (gating_output_dir / "gating_network.pt").exists()
         

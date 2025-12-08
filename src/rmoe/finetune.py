@@ -3,6 +3,7 @@ import torch
 import logging
 from pathlib import Path
 from transformers import TrainingArguments, EarlyStoppingCallback
+from peft import LoraConfig, get_peft_model, TaskType
 from models import load_model_and_tokenizer, freeze_all_except_mlp
 from data import prepare_truthfulqa_dataset, prepare_qmsum_dataset
 from rmoe.trainer import MultiDatasetEvalTrainer, TruthfulQADataCollator
@@ -36,6 +37,11 @@ def train_expert(
     seed=42,
     qmsum_max_new_tokens=200,
     temperature=0.0,
+    use_lora=True,
+    lora_r=8,
+    lora_alpha=16,
+    lora_dropout=0.05,
+    lora_target_modules=None,
 ):
     logger.info(f"Training expert for dataset: {dataset_name}")
     logger.info(f"Output directory: {output_dir}")
@@ -51,8 +57,45 @@ def train_expert(
         logger.info(f"GPU memory before loading: {torch.cuda.memory_allocated() / 1024**3:.2f} GB / {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
     
     model = model.to(device)
-    logger.info("Freezing all parameters except MLP layers...")
-    freeze_all_except_mlp(model)
+    
+    if use_lora:
+        logger.info("Applying LoRA adapters for parameter-efficient fine-tuning...")
+        
+        # Default target modules for LoRA (typically attention and MLP layers)
+        if lora_target_modules is None:
+            # Auto-detect architecture and set appropriate target modules
+            model_type = model.config.model_type if hasattr(model.config, 'model_type') else None
+            
+            if model_type in ["qwen2", "qwen"]:
+                # Qwen2 architecture: target both attention and MLP
+                lora_target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+                logger.info(f"Detected Qwen2 model, targeting attention + MLP: {lora_target_modules}")
+            elif model_type == "llama":
+                # Llama architecture
+                lora_target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+                logger.info(f"Detected Llama model, targeting attention + MLP: {lora_target_modules}")
+            else:
+                # Generic fallback - target common module names
+                lora_target_modules = ["q_proj", "v_proj", "gate_proj", "up_proj", "down_proj"]
+                logger.info(f"Using generic target modules: {lora_target_modules}")
+        
+        lora_config = LoraConfig(
+            r=lora_r,
+            lora_alpha=lora_alpha,
+            target_modules=lora_target_modules,
+            lora_dropout=lora_dropout,
+            bias="none",
+            task_type=TaskType.CAUSAL_LM,
+        )
+        
+        logger.info(f"LoRA Config: r={lora_r}, alpha={lora_alpha}, dropout={lora_dropout}")
+        logger.info(f"LoRA target modules: {lora_target_modules}")
+        
+        model = get_peft_model(model, lora_config)
+        model.print_trainable_parameters()
+    else:
+        logger.info("Freezing all parameters except MLP layers...")
+        freeze_all_except_mlp(model)
     
     model.train()
     full_dataset = prepare_dataset(dataset_name, tokenizer, max_length, keep_metadata=True)
@@ -163,8 +206,23 @@ def train_expert(
     logger.info("Starting training...")
     trainer.train()
     logger.info(f"Saving model to: {output_dir}")
-    trainer.save_model()
-    tokenizer.save_pretrained(str(output_dir))
+    
+    if use_lora:
+        # Save LoRA adapter weights
+        model.save_pretrained(str(output_dir))
+        logger.info(f"LoRA adapter saved to: {output_dir}")
+        
+        # Also merge and save the full model for easier loading later
+        logger.info("Merging LoRA weights with base model...")
+        merged_model = model.merge_and_unload()
+        merged_output_dir = output_dir / "merged"
+        merged_output_dir.mkdir(exist_ok=True)
+        merged_model.save_pretrained(str(merged_output_dir))
+        tokenizer.save_pretrained(str(merged_output_dir))
+        logger.info(f"Merged model saved to: {merged_output_dir}")
+    else:
+        trainer.save_model()
+        tokenizer.save_pretrained(str(output_dir))
     logger.info("Evaluating on all datasets...")
     model.eval()
     final_results = evaluate_all_datasets(model, tokenizer, eval_datasets, device, qmsum_max_new_tokens, temperature)
