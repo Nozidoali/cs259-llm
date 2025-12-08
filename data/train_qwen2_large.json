@@ -81,6 +81,8 @@
   "full_finetune": {
     "comment": "Optional: Fine-tune the merged MoE model end-to-end",
     "enabled": true,
+    "finetune_longbench": true,
+    "comment_finetune_longbench": "Include qmsum/longbench in fine-tuning (limited to 50 samples). Set to false to only use truthfulqa.",
     "num_epochs": 100,
     "batch_size": 2,
     "gradient_accumulation_steps": 8,

@@ -253,6 +253,14 @@ Examples:
             )
             rmoe_path = rmoe_output_dir
             logger.info(f"MoE model (rmoe_model) created at: {rmoe_path}")
+            
+            # Clear GPU memory after merging
+            logger.info("Clearing GPU memory after merging...")
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                logger.info(f"GPU memory after merge: {torch.cuda.memory_allocated() / 1024**3:.2f} GB / {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
         else:
             logger.info("Skipping model merging (--skip-merge flag)")
             rmoe_path = work_dir / "rmoe_model"
@@ -262,9 +270,18 @@ Examples:
         if not args.skip_finetune:
             finetune_config = config.get("full_finetune", {})
             if finetune_config.get("enabled", False):
-                logger.info(f"=" * 60)
+                logger.info(f"=" * 80)
                 logger.info("Full finetuning (all layers unfrozen)")
-                logger.info(f"=" * 60)
+                logger.info(f"=" * 80)
+                
+                # CRITICAL: Clear all GPU memory before loading model for fine-tuning
+                logger.info("Clearing GPU memory before loading model for fine-tuning...")
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+                    logger.info(f"GPU memory before loading: {torch.cuda.memory_allocated() / 1024**3:.2f} GB / {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+                
                 datasets = config.get("datasets", ["truthfulqa", "longbench"])
                 model, tokenizer = load_model_and_tokenizer(model_path=rmoe_path, dtype=torch.float32)
                 use_mps = torch.backends.mps.is_available()
@@ -273,7 +290,9 @@ Examples:
                 
                 if use_cuda:
                     torch.cuda.empty_cache()
-                    logger.info(f"GPU memory: {torch.cuda.memory_allocated() / 1024**3:.2f} GB / {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+                    logger.info(f"GPU memory after loading model: {torch.cuda.memory_allocated() / 1024**3:.2f} GB / {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+                
+                logger.info(f"Moving model to device: {device}")
                 model = model.to(device)
                 for param in model.parameters():
                     param.requires_grad = True
@@ -283,17 +302,33 @@ Examples:
                 
                 model.train()
                 train_datasets = []
+                
+                # Check if we should fine-tune with longbench (default: true, limited to 50 samples)
+                finetune_longbench = finetune_config.get("finetune_longbench", True)
+                
                 for dataset_name in datasets:
                     if dataset_name == "truthfulqa":
                         ds = prepare_truthfulqa_dataset(tokenizer, max_length=finetune_config.get("max_length", 512), keep_metadata=False, model_type="causal")
+                        train_datasets.append(ds)
+                        logger.info(f"Added truthfulqa dataset: {len(ds)} samples")
                     elif dataset_name in ["longbench", "qmsum"]:
-                        ds = prepare_qmsum_dataset(tokenizer, max_length=finetune_config.get("max_length", 512), keep_metadata=False, model_type="causal")
+                        if finetune_longbench:
+                            # Use only 50 qmsum samples for fine-tuning to save memory and time
+                            ds = prepare_qmsum_dataset(tokenizer, max_length=finetune_config.get("max_length", 512), keep_metadata=False, model_type="causal", num_samples=50)
+                            train_datasets.append(ds)
+                            logger.info(f"Added qmsum dataset: {len(ds)} samples (limited to 50)")
+                        else:
+                            logger.info(f"Skipping qmsum dataset (finetune_longbench=False)")
                     else:
                         continue
-                    train_datasets.append(ds)
+                
+                if not train_datasets:
+                    logger.error("No datasets selected for fine-tuning!")
+                    raise ValueError("No datasets selected for fine-tuning")
+                
                 combined_dataset = concatenate_datasets(train_datasets)
                 combined_dataset = combined_dataset.train_test_split(test_size=finetune_config.get("eval_split", 0.2), seed=config.get("seed", 42))
-                logger.info(f"Train samples: {len(combined_dataset['train'])}, Eval samples: {len(combined_dataset['test'])}")
+                logger.info(f"Total train samples: {len(combined_dataset['train'])}, Eval samples: {len(combined_dataset['test'])}")
                 output_dir = work_dir / "rmoe_model_finetuned"
                 output_dir.mkdir(parents=True, exist_ok=True)
                 training_args = TrainingArguments(

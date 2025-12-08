@@ -122,8 +122,8 @@ fi
 # Training
 ###############################
 
-python train.py data/train_qwen2_large.json --conversion-mode preserve_moe --skip-experts 
-echo 'Training completed.'
+python train.py data/train_qwen2_large.json --conversion-mode preserve_moe --skip-experts --skip-gating --skip-merge 
+echo 'Training completed.' 
 
 # Keep container alive
 sleep infinity
