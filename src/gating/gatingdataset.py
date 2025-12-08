@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+import hashlib
 from pathlib import Path
 from typing import Optional, List
 import torch
@@ -18,6 +19,12 @@ from data import prepare_truthfulqa_dataset, prepare_qmsum_dataset
 
 logger = logging.getLogger(__name__)
 
+def _get_datasets_hash(datasets: List[str]) -> str:
+    """Generate a short hash from the datasets list to avoid long filenames."""
+    datasets_tuple = tuple(sorted(datasets))
+    hash_obj = hashlib.md5(str(datasets_tuple).encode())
+    return hash_obj.hexdigest()[:12]
+
 def load_base_model_for_embeddings(base_model: str):
     if base_model in MODEL_CONFIGS:
         config = MODEL_CONFIGS[base_model]
@@ -32,7 +39,11 @@ def load_base_model_for_embeddings(base_model: str):
         model_path = base_model
         logger.info(f"Using HuggingFace model: {base_model}")
     logger.info(f"Loading model from: {model_path}")
-    tokenizer = AutoTokenizer.from_pretrained(model_path, fix_mistral_regex=True)
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_path,
+        trust_remote_code=True,
+        fix_mistral_regex=True
+    )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     if torch.cuda.is_available():
@@ -109,7 +120,7 @@ def prepare_gating_dataset_multi(
         raise ValueError("train_split + val_split + test_split must equal 1.0")
     if cache_dir is None:
         model_name = base_model.replace("/", "_").replace("-", "_")
-        cache_key = "_".join(sorted(datasets))
+        cache_key = _get_datasets_hash(datasets)
         cache_dir = DATA_DIR / "gating_cache" / f"{model_name}_{cache_key}"
     else:
         cache_dir = Path(cache_dir)
@@ -166,14 +177,16 @@ def prepare_shared_expert_gating_dataset(
     cache_dir: Optional[Path] = None,
     prompt_dir: Optional[Path] = None,
     seed: int = 42,
+    never_use_shared_expert: bool = False,
 ):
     if abs(train_split + val_split + test_split - 1.0) > 1e-6:
         raise ValueError("train_split + val_split + test_split must equal 1.0")
     
     if cache_dir is None:
         model_name = base_model.replace("/", "_").replace("-", "_")
-        cache_key = "_".join(sorted(datasets))
-        cache_dir = DATA_DIR / "gating_cache" / f"{model_name}_{cache_key}_shared"
+        cache_key = _get_datasets_hash(datasets)
+        suffix = "never_shared" if never_use_shared_expert else "shared"
+        cache_dir = DATA_DIR / "gating_cache" / f"{model_name}_{cache_key}_{suffix}"
     else:
         cache_dir = Path(cache_dir)
     
@@ -193,11 +206,14 @@ def prepare_shared_expert_gating_dataset(
     all_texts = []
     all_labels = []
     
+    label_value = 0.0 if never_use_shared_expert else 1.0
+    label_desc = "never use shared expert" if never_use_shared_expert else "use shared expert"
+    
     for dataset_name in datasets:
         texts = load_dataset_texts(dataset_name, prompt_dir)
         all_texts.extend(texts)
-        all_labels.extend([1.0] * len(texts))
-        logger.info(f"Dataset {dataset_name}: {len(texts)} samples (label=1.0 - use shared expert)")
+        all_labels.extend([label_value] * len(texts))
+        logger.info(f"Dataset {dataset_name}: {len(texts)} samples (label={label_value} - {label_desc})")
     
     logger.info(f"Total samples: {len(all_texts)} for shared expert gating")
     logger.info("Extracting embeddings...")

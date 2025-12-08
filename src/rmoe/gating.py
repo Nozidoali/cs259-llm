@@ -66,7 +66,6 @@ def train_gating_network(
     base_model,
     datasets,
     output_dir,
-    hidden_dims=[512, 256],
     dropout=0.1,
     learning_rate=1e-4,
     batch_size=32,
@@ -103,7 +102,6 @@ def train_gating_network(
     logger.info("Initializing gating network...")
     model = GatingNetwork(
         input_dim=embedding_dim,
-        hidden_dims=hidden_dims,
         dropout=dropout,
         num_classes=num_classes,
     ).to(device)
@@ -153,7 +151,6 @@ def train_gating_network(
         "num_classes": num_classes,
         "datasets": datasets,
         "config": {
-            "hidden_dims": hidden_dims,
             "dropout": dropout,
             "learning_rate": learning_rate,
             "batch_size": batch_size,
@@ -255,10 +252,11 @@ def train_shared_expert_gating(
     prompt_dir=None,
 ):
     """
-    Train shared expert gating network (binary classification).
-    Decides whether to use the shared expert for each input.
+    Train shared expert gating network to always output 0 (never use shared expert).
+    This ensures the shared expert does not influence the output, as required for Qwen2MoE
+    when using zero-initialized shared experts.
     """
-    logger.info("Training shared expert gating network (binary classification)")
+    logger.info("Training shared expert gating network to NEVER use shared expert (always output 0)")
     logger.info(f"Output directory: {output_dir}")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -275,6 +273,7 @@ def train_shared_expert_gating(
         test_split=test_split,
         seed=seed,
         prompt_dir=prompt_dir,
+        never_use_shared_expert=True,  # Always train to output 0
     )
     
     embedding_dim = len(dataset["train"][0]["embedding"])

@@ -159,7 +159,6 @@ Examples:
                 base_model=base_model_path,
                 datasets=datasets,
                 output_dir=gating_output_dir,
-                hidden_dims=gating_config.get("hidden_dims", [512, 256]),
                 dropout=gating_config.get("dropout", 0.1),
                 learning_rate=gating_config.get("learning_rate", 1e-4),
                 batch_size=gating_config.get("batch_size", 32),
@@ -180,32 +179,33 @@ Examples:
             gating_path = gating_output_dir
         
         merge_config = config.get("merge", {})
-        if merge_config.get("use_shared_expert", False):
-            shared_gating_exists = gating_output_dir.exists() and (gating_output_dir / "shared_expert_gating.pt").exists()
-            
-            if not args.skip_gating and not shared_gating_exists:
-                logger.info(f"=" * 60)
-                logger.info("Training shared expert gating network")
-                logger.info(f"=" * 60)
-                train_shared_expert_gating(
-                    base_model=base_model_path,
-                    datasets=datasets,
-                    output_dir=gating_output_dir,
-                    learning_rate=gating_config.get("learning_rate", 1e-4),
-                    batch_size=gating_config.get("batch_size", 32),
-                    num_epochs=gating_config.get("num_epochs", 10),
-                    weight_decay=gating_config.get("weight_decay", 0.01),
-                    train_split=gating_config.get("train_split", 0.7),
-                    val_split=gating_config.get("val_split", 0.15),
-                    test_split=gating_config.get("test_split", 0.15),
-                    seed=config.get("seed", 42),
-                    prompt_dir=config.get("prompt_dir"),
-                )
+        # Qwen2MoE always requires shared expert gating
+        shared_gating_exists = gating_output_dir.exists() and (gating_output_dir / "shared_expert_gating.pt").exists()
+        
+        if not args.skip_gating and not shared_gating_exists:
+            logger.info(f"=" * 60)
+            logger.info("Training shared expert gating network")
+            logger.info(f"=" * 60)
+            logger.info("Note: Training gating to never use shared expert (always output 0)")
+            train_shared_expert_gating(
+                base_model=base_model_path,
+                datasets=datasets,
+                output_dir=gating_output_dir,
+                learning_rate=gating_config.get("learning_rate", 1e-4),
+                batch_size=gating_config.get("batch_size", 32),
+                num_epochs=gating_config.get("num_epochs", 10),
+                weight_decay=gating_config.get("weight_decay", 0.01),
+                train_split=gating_config.get("train_split", 0.7),
+                val_split=gating_config.get("val_split", 0.15),
+                test_split=gating_config.get("test_split", 0.15),
+                seed=config.get("seed", 42),
+                prompt_dir=config.get("prompt_dir"),
+            )
+        else:
+            if shared_gating_exists:
+                logger.info("Shared expert gating network already exists, skipping shared expert gating training")
             else:
-                if shared_gating_exists:
-                    logger.info("Shared expert gating network already exists, skipping shared expert gating training")
-                else:
-                    logger.info("Skipping shared expert gating network training (--skip-gating flag)")
+                logger.info("Skipping shared expert gating network training (--skip-gating flag)")
         
         if not args.skip_merge:
             logger.info(f"=" * 60)
@@ -219,9 +219,10 @@ Examples:
                 output_dir=rmoe_output_dir,
                 base_model_path=base_model_path,
                 routing_mode=merge_config.get("routing_mode", "weighted_sum"),
-                target_architecture=merge_config.get("target_architecture", "auto"),
-                use_shared_expert=merge_config.get("use_shared_expert", False),
                 shared_expert_path=merge_config.get("shared_expert_path"),
+                num_experts_per_tok=merge_config.get("num_experts_per_tok"),
+                use_zero_shared_expert=merge_config.get("use_zero_shared_expert", True),
+                forced_expert_idx=merge_config.get("forced_expert_idx"),
             )
             rmoe_path = rmoe_output_dir
             logger.info(f"MoE model (rmoe_model) created at: {rmoe_path}")
@@ -332,14 +333,13 @@ Examples:
                     base_model_path=base_model_path,
                     routing_mode=merge_cfg.get("routing_mode", "weighted_sum"),
                     device=device,
-                    target_architecture=merge_cfg.get("target_architecture", "auto"),
-                    use_shared_expert=merge_cfg.get("use_shared_expert", False),
                     shared_expert_path=merge_cfg.get("shared_expert_path"),
+                    num_experts_per_tok=merge_cfg.get("num_experts_per_tok"),
+                    use_zero_shared_expert=merge_cfg.get("use_zero_shared_expert", True),
                 )
-                qwen3_format_dir = work_dir / "rmoe_qwen3_format"
-                arch_name = moe_model.target_architecture.upper()
-                logger.info(f"Saving in {arch_name} format: {qwen3_format_dir}")
-                moe_model.save_pretrained(qwen3_format_dir)
+                qwen2_format_dir = work_dir / "rmoe_qwen2_format"
+                logger.info(f"Saving in Qwen2MoE format: {qwen2_format_dir}")
+                moe_model.save_pretrained(qwen2_format_dir)
                 if config.get("gguf_output"):
                     output_file = Path(config["gguf_output"])
                 else:
@@ -347,10 +347,10 @@ Examples:
                     outtype = quantize_map.get(quantize_level, quantize_level)
                     output_file = work_dir / f"rmoe_model_moe_{outtype}.gguf"
                 output_file.parent.mkdir(parents=True, exist_ok=True)
-                logger.info(f"Converting: {qwen3_format_dir}")
+                logger.info(f"Converting: {qwen2_format_dir}")
                 logger.info(f"Output: {output_file}")
                 logger.info(f"Quantization: {quantize_level}")
-                convert_to_gguf(qwen3_format_dir, output_file, quantize_level)
+                convert_to_gguf(qwen2_format_dir, output_file, quantize_level)
                 logger.info(f"✓ MoE-preserved GGUF saved to: {output_file}")
                 logger.info(f"✓ All {len(expert_paths)} experts preserved with routing!")
                 
@@ -380,8 +380,7 @@ Examples:
             logger.info(f"Conversion mode: {args.conversion_mode}")
             if args.conversion_mode == "preserve_moe":
                 logger.info(f"  ✓ MoE structure preserved ({len(expert_paths)} experts with routing)")
-                arch_display = config.get("merge", {}).get("target_architecture", "auto").upper()
-                logger.info(f"  {arch_display} format: {work_dir / 'rmoe_qwen3_format'}")
+                logger.info(f"  Qwen2MoE format: {work_dir / 'rmoe_qwen2_format'}")
             else:
                 logger.info(f"  ✓ Experts averaged into single model")
                 logger.info(f"  Standard format: {work_dir / 'rmoe_standard'}")

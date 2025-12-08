@@ -6,7 +6,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 class GatingNetwork(nn.Module):
-    def __init__(self, input_dim: int, hidden_dims: list = [512, 256], dropout: float = 0.1, num_classes: int = 2):
+    def __init__(self, input_dim: int, dropout: float = 0.1, num_classes: int = 2):
         super().__init__()
         self.network = nn.Linear(input_dim, num_classes, bias=False)
         self.softmax = nn.Softmax(dim=-1)

@@ -100,11 +100,15 @@ def load_model_and_tokenizer(model_key_or_path=None, model_path=None, return_con
         tokenizer = AutoTokenizer.from_pretrained(
             model_id_for_load,
             local_files_only=True,
-            trust_remote_code=False,
+            trust_remote_code=True,
             fix_mistral_regex=True
         )
     else:
-        tokenizer = AutoTokenizer.from_pretrained(model_id, fix_mistral_regex=True)
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_id,
+            trust_remote_code=True,
+            fix_mistral_regex=True
+        )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     if dtype is not None:
@@ -114,9 +118,9 @@ def load_model_and_tokenizer(model_key_or_path=None, model_path=None, return_con
     else:
         model_dtype = torch.float32
     if is_local:
-        model_load_kwargs = {"local_files_only": True, "trust_remote_code": False}
+        model_load_kwargs = {"local_files_only": True, "trust_remote_code": True}
     else:
-        model_load_kwargs = {}
+        model_load_kwargs = {"trust_remote_code": True}
     
     if model_type == "seq2seq":
         model = AutoModelForSeq2SeqLM.from_pretrained(model_id_for_load, dtype=model_dtype, **model_load_kwargs)

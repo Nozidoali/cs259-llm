@@ -104,7 +104,6 @@ EVALUATION_CONFIG = {
 
 GATING_CONFIG = {
     "base_model": "qwen2-0.5b",
-    "hidden_dims": [512, 256],
     "dropout": 0.1,
     "learning_rate": 1e-4,
     "batch_size": 32,

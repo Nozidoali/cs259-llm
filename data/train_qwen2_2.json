@@ -41,13 +41,11 @@
   },
   
   "merge": {
-    "comment": "Merge experts into MoE model using gating network",
+    "comment": "Merge experts into Qwen2MoE model using gating network",
     "routing_mode": "select_one",
     "comment_routing_mode": "Options: 'weighted_sum' (soft routing) or 'select_one' (hard routing)",
-    "target_architecture": "qwen2moe",
-    "comment_target_architecture": "Options: 'auto' (qwen3moe by default, qwen2moe if use_shared_expert=true), 'qwen2moe', 'qwen3moe'",
-    "use_shared_expert": true,
-    "comment_use_shared_expert": "Set to true to use original base model as shared expert (enables Qwen2MoE format)",
+    "use_zero_shared_expert": true,
+    "comment_use_zero_shared_expert": "Set to true to use zero-initialized shared expert (required for Qwen2MoE)",
     "shared_expert_path": null,
     "comment_shared_expert_path": "null = use base_model as shared expert, or specify path to different model"
   },

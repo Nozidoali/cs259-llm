@@ -21,9 +21,10 @@ from gating.gatingdataset import load_base_model_for_embeddings
 logger = logging.getLogger(__name__)
 
 class MoEFFN(nn.Module):
-    def __init__(self, expert_mlps: List, parent_model, routing_mode: Literal["weighted_sum", "select_one"] = "weighted_sum"):
+    def __init__(self, expert_mlps: List, parent_model, shared_expert_mlp: nn.Module, routing_mode: Literal["weighted_sum", "select_one"] = "weighted_sum"):
         super().__init__()
         self.expert_mlps = nn.ModuleList(expert_mlps)
+        self.shared_expert_mlp = shared_expert_mlp
         object.__setattr__(self, 'parent_model', parent_model)
         self.routing_mode = routing_mode
         self.num_experts = len(expert_mlps)
@@ -49,7 +50,15 @@ class MoEFFN(nn.Module):
     
     def forward(self, hidden_states):
         batch_size = hidden_states.shape[0]
-        if hasattr(self.parent_model, '_current_gating_probs') and self.parent_model._current_gating_probs is not None:
+        # Check if forced expert routing is enabled
+        if hasattr(self.parent_model, 'forced_expert_idx') and self.parent_model.forced_expert_idx is not None:
+            # Force routing to specific expert (bypass gating network)
+            forced_idx = self.parent_model.forced_expert_idx
+            if forced_idx < 0 or forced_idx >= self.num_experts:
+                raise ValueError(f"forced_expert_idx {forced_idx} is out of range [0, {self.num_experts-1}]")
+            gating_probs = torch.zeros(batch_size, self.num_experts, device=hidden_states.device, dtype=hidden_states.dtype)
+            gating_probs[:, forced_idx] = 1.0
+        elif hasattr(self.parent_model, '_current_gating_probs') and self.parent_model._current_gating_probs is not None:
             if self.parent_model._current_gating_probs.dim() == 3:
                 gating_probs = self.parent_model._current_gating_probs[:, 0, :].to(hidden_states.dtype)
             else:
@@ -57,31 +66,58 @@ class MoEFFN(nn.Module):
         else:
             logger.warning("_current_gating_probs not set, using equal probabilities")
             gating_probs = torch.ones(batch_size, self.num_experts, device=hidden_states.device, dtype=hidden_states.dtype) / self.num_experts
+        
+        # Get shared expert gating probability (should be ~0 after training)
+        if hasattr(self.parent_model, '_current_shared_expert_gate_prob') and self.parent_model._current_shared_expert_gate_prob is not None:
+            shared_gate_prob = self.parent_model._current_shared_expert_gate_prob.to(hidden_states.dtype)  # Shape: (batch_size, 1)
+        else:
+            logger.warning("_current_shared_expert_gate_prob not set, using 0 (no shared expert contribution)")
+            shared_gate_prob = torch.zeros(batch_size, 1, device=hidden_states.device, dtype=hidden_states.dtype)
+        
+        # Compute expert outputs
         expert_outputs = [expert_mlp(hidden_states) for expert_mlp in self.expert_mlps]
+        
+        # Compute expert output (weighted sum or select one)
         if self.routing_mode == "weighted_sum":
-            output = torch.zeros_like(expert_outputs[0])
+            expert_output = torch.zeros_like(expert_outputs[0])
             for idx, expert_out in enumerate(expert_outputs):
                 prob = gating_probs[:, idx].unsqueeze(-1).unsqueeze(-1)
-                output += prob * expert_out
-            return output
+                expert_output += prob * expert_out
         else:
             selected_expert = gating_probs.argmax(dim=-1)
-            output = torch.zeros_like(expert_outputs[0])
+            expert_output = torch.zeros_like(expert_outputs[0])
             for idx, expert_out in enumerate(expert_outputs):
                 mask = (selected_expert == idx).unsqueeze(-1).unsqueeze(-1)
-                output += mask.float() * expert_out
-            return output
+                expert_output += mask.float() * expert_out
+        
+        # Compute shared expert output
+        shared_expert_output = self.shared_expert_mlp(hidden_states)
+        
+        # Combine: output = (1 - shared_prob) * expert_output + shared_prob * shared_expert_output
+        # Since shared_prob should be ~0 and shared_expert is zero-initialized, this effectively uses only expert_output
+        output = (1.0 - shared_gate_prob.unsqueeze(-1)) * expert_output + shared_gate_prob.unsqueeze(-1) * shared_expert_output
+        
+        return output
 
 class MoEModel(nn.Module):
-    def __init__(self, expert_paths: List[Union[str, Path]], gating_model_path: Union[str, Path], base_model_path: Optional[Union[str, Path]] = None, routing_mode: Literal["weighted_sum", "select_one"] = "weighted_sum", device=None, target_architecture: Optional[Literal["qwen2moe", "qwen3moe", "auto"]] = "auto", use_shared_expert: bool = False, shared_expert_path: Optional[Union[str, Path]] = None):
+    def __init__(self, expert_paths: List[Union[str, Path]], gating_model_path: Union[str, Path], base_model_path: Optional[Union[str, Path]] = None, routing_mode: Literal["weighted_sum", "select_one"] = "weighted_sum", device=None, shared_expert_path: Optional[Union[str, Path]] = None, num_experts_per_tok: Optional[int] = None, use_zero_shared_expert: bool = True, forced_expert_idx: Optional[int] = None):
         super().__init__()
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
         self.device = device
         self.routing_mode = routing_mode
-        self.target_architecture = target_architecture
-        self.use_shared_expert = use_shared_expert
+        self.num_experts_per_tok = num_experts_per_tok
+        self.use_zero_shared_expert = use_zero_shared_expert
+        # Qwen2MoE always requires shared expert
+        self.use_shared_expert = True
+        # Force routing to a specific expert (bypasses gating network)
+        self.forced_expert_idx = forced_expert_idx
         expert_paths = [Path(p) for p in expert_paths]
+        self.num_experts_total = len(expert_paths)
+        if forced_expert_idx is not None:
+            if forced_expert_idx < 0 or forced_expert_idx >= self.num_experts_total:
+                raise ValueError(f"forced_expert_idx {forced_expert_idx} is out of range [0, {self.num_experts_total-1}]")
+            logger.info(f"FORCED ROUTING: Will always use expert {forced_expert_idx} (bypassing gating network)")
         gating_model_path = Path(gating_model_path)
         if base_model_path is None:
             base_model_path = expert_paths[0]
@@ -158,7 +194,6 @@ class MoEModel(nn.Module):
         
         gating_network = GatingNetwork(
             input_dim=embedding_dim,
-            hidden_dims=[512, 256],
             dropout=0.1,
             num_classes=num_classes,
         )
@@ -172,14 +207,18 @@ class MoEModel(nn.Module):
         self.embedding_model = base_model_for_emb
         self.embedding_model.eval()
         self._current_gating_probs = None
+        self._current_shared_expert_gate_prob = None
         
-        self.shared_expert_model = None
-        self.shared_expert_gating = None
-        if use_shared_expert:
+        # Qwen2MoE always requires shared expert
+        logger.info("Qwen2MoE requires shared expert - initializing...")
+        if use_zero_shared_expert:
+            logger.info("Using zero-initialized shared expert (no model loaded)")
+            self.shared_expert_model = None  # Will create zero tensors in save_pretrained
+        else:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             gc.collect()
-            
+
             if shared_expert_path is None:
                 shared_expert_path = base_model_path
             shared_expert_path = Path(shared_expert_path)
@@ -187,22 +226,22 @@ class MoEModel(nn.Module):
             shared_expert_model, _ = load_model_and_tokenizer(model_path=str(shared_expert_path), dtype=torch.float32)
             self.shared_expert_model = shared_expert_model.to(self.device)
             self.shared_expert_model.eval()
-            
+
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             gc.collect()
-            
-            shared_gating_checkpoint = gating_model_path / "shared_expert_gating.pt"
-            if not shared_gating_checkpoint.exists():
-                raise FileNotFoundError(f"Shared expert gating checkpoint not found at {shared_gating_checkpoint}")
-            
-            logger.info(f"Loading shared expert gating network from: {shared_gating_checkpoint}")
-            self.shared_expert_gating = SharedExpertGating(input_dim=embedding_dim)
-            shared_gating_state = torch.load(shared_gating_checkpoint, map_location=self.device, weights_only=True)
-            self.shared_expert_gating.load_state_dict(shared_gating_state)
-            self.shared_expert_gating = self.shared_expert_gating.to(self.device)
-            self.shared_expert_gating.eval()
-            logger.info("Shared expert and gating network loaded successfully")
+
+        shared_gating_checkpoint = gating_model_path / "shared_expert_gating.pt"
+        if not shared_gating_checkpoint.exists():
+            raise FileNotFoundError(f"Shared expert gating checkpoint not found at {shared_gating_checkpoint}")
+
+        logger.info(f"Loading shared expert gating network from: {shared_gating_checkpoint}")
+        self.shared_expert_gating = SharedExpertGating(input_dim=embedding_dim)
+        shared_gating_state = torch.load(shared_gating_checkpoint, map_location=self.device, weights_only=True)
+        self.shared_expert_gating.load_state_dict(shared_gating_state)
+        self.shared_expert_gating = self.shared_expert_gating.to(self.device)
+        self.shared_expert_gating.eval()
+        logger.info("Shared expert gating network loaded successfully")
         if hasattr(base_model, 'model') and hasattr(base_model.model, 'layers'):
             layers = base_model.model.layers
         elif hasattr(base_model, 'layers'):
@@ -213,23 +252,66 @@ class MoEModel(nn.Module):
             raise ValueError(f"Unsupported model architecture")
         num_layers = len(layers)
         logger.info(f"Found {num_layers} layers in base model")
+        logger.info("Using Qwen2MoE architecture (requires shared expert)")
         
-        if self.target_architecture == "auto":
-            if use_shared_expert:
-                self.target_architecture = "qwen2moe"
-                logger.info(f"Auto-detected architecture: qwen2moe (with shared expert)")
-            else:
-                self.target_architecture = "qwen3moe"
-                logger.info(f"Auto-detected architecture: qwen3moe (no shared expert requirement)")
+        # Extract shared expert MLPs by layer
+        shared_expert_mlps_by_layer = {}
+        if use_zero_shared_expert or self.shared_expert_model is None:
+            # Will create zero-initialized shared expert MLPs later
+            for layer_idx in range(num_layers):
+                shared_expert_mlps_by_layer[layer_idx] = None
         else:
-            logger.info(f"Using configured architecture: {self.target_architecture}")
+            if hasattr(self.shared_expert_model, 'model') and hasattr(self.shared_expert_model.model, 'layers'):
+                shared_layers = self.shared_expert_model.model.layers
+            elif hasattr(self.shared_expert_model, 'layers'):
+                shared_layers = self.shared_expert_model.layers
+            else:
+                raise ValueError("Unsupported shared expert model architecture")
+            
+            for layer_idx in range(num_layers):
+                shared_layer = shared_layers[layer_idx]
+                if hasattr(shared_layer, 'mlp'):
+                    shared_expert_mlp = shared_layer.mlp.to(self.device)
+                    shared_expert_mlps_by_layer[layer_idx] = shared_expert_mlp
         
         expert_mlps_list = []
         for layer_idx in range(num_layers):
             layer = layers[layer_idx]
             if hasattr(layer, 'mlp'):
                 expert_mlps = expert_mlps_by_layer[layer_idx]
-                moe_ffn = MoEFFN(expert_mlps, self, routing_mode=routing_mode)
+                
+                # Get or create shared expert MLP for this layer
+                if shared_expert_mlps_by_layer[layer_idx] is not None:
+                    shared_expert_mlp = shared_expert_mlps_by_layer[layer_idx]
+                else:
+                    # Create zero-initialized shared expert MLP
+                    first_expert = expert_mlps[0]
+                    if hasattr(first_expert, 'gate_proj') and hasattr(first_expert, 'up_proj') and hasattr(first_expert, 'down_proj'):
+                        # Create a zero-initialized MLP with same structure
+                        class ZeroMLP(nn.Module):
+                            def __init__(self, gate_shape, up_shape, down_shape, dtype):
+                                super().__init__()
+                                self.gate_proj = nn.Linear(gate_shape[1], gate_shape[0], bias=False)
+                                self.up_proj = nn.Linear(up_shape[1], up_shape[0], bias=False)
+                                self.down_proj = nn.Linear(down_shape[1], down_shape[0], bias=False)
+                                # Zero initialize
+                                nn.init.zeros_(self.gate_proj.weight)
+                                nn.init.zeros_(self.up_proj.weight)
+                                nn.init.zeros_(self.down_proj.weight)
+                            
+                            def forward(self, x):
+                                gate = self.gate_proj(x)
+                                up = self.up_proj(x)
+                                return self.down_proj(torch.nn.functional.silu(gate) * up)
+                        
+                        gate_shape = first_expert.gate_proj.weight.shape
+                        up_shape = first_expert.up_proj.weight.shape
+                        down_shape = first_expert.down_proj.weight.shape
+                        shared_expert_mlp = ZeroMLP(gate_shape, up_shape, down_shape, first_expert.gate_proj.weight.dtype).to(self.device)
+                    else:
+                        raise ValueError("Cannot create zero-initialized shared expert MLP - unsupported expert structure")
+                
+                moe_ffn = MoEFFN(expert_mlps, self, shared_expert_mlp, routing_mode=routing_mode)
                 layer.mlp = moe_ffn
                 expert_mlps_list.append(expert_mlps)
         self.model = base_model
@@ -255,7 +337,7 @@ class MoEModel(nn.Module):
             mean_embeddings = sum_embeddings / sum_mask
         return mean_embeddings
     
-    def forward(self, input_ids, attention_mask=None, labels=None, **kwargs):
+    def forward(self, input_ids, attention_mask=None, labels=None, recompute_gating=True, **kwargs):
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
         embeddings = self.model.embed_tokens(input_ids) if hasattr(self.model, 'embed_tokens') else self.model.embeddings(input_ids)
@@ -265,10 +347,23 @@ class MoEModel(nn.Module):
         elif hasattr(self.model, 'layer_norm'):
             hidden_states = self.model.layer_norm(hidden_states)
         batch_size, seq_len = input_ids.shape
-        with torch.no_grad():
-            gating_input = self._get_embeddings(input_ids, attention_mask)
-            gating_probs = self.gating_network(gating_input)
-        self._current_gating_probs = gating_probs
+        # Skip gating computation if forced expert routing is enabled
+        if self.forced_expert_idx is not None:
+            # Create one-hot gating probabilities for forced expert
+            gating_probs = torch.zeros(batch_size, self.num_experts_total, device=self.device)
+            gating_probs[:, self.forced_expert_idx] = 1.0
+            self._current_gating_probs = gating_probs
+            # Shared expert should not be used when forcing a specific expert
+            self._current_shared_expert_gate_prob = torch.zeros(batch_size, 1, device=self.device)
+        # Only recompute gating if not already set or if explicitly requested
+        elif recompute_gating or self._current_gating_probs is None:
+            with torch.no_grad():
+                gating_input = self._get_embeddings(input_ids, attention_mask)
+                gating_probs = self.gating_network(gating_input)
+                # Always compute shared expert gating probability (required for Qwen2MoE)
+                shared_gate_prob = self.shared_expert_gating(gating_input)  # Shape: (batch_size, 1)
+            self._current_gating_probs = gating_probs
+            self._current_shared_expert_gate_prob = shared_gate_prob
         if hasattr(self.model, 'layers'):
             for layer in self.model.layers:
                 hidden_states = layer(hidden_states, attention_mask=attention_mask, **kwargs)[0] if isinstance(layer(hidden_states, attention_mask=attention_mask, **kwargs), tuple) else layer(hidden_states, attention_mask=attention_mask, **kwargs)
@@ -296,12 +391,23 @@ class MoEModel(nn.Module):
         self.eval()
         with torch.no_grad():
             batch_size, seq_len = input_ids.shape
-            gating_input = self._get_embeddings(input_ids, attention_mask)
-            gating_probs = self.gating_network(gating_input)
-            self._current_gating_probs = gating_probs
             generated = input_ids.clone()
+            # Recompute routing for each generation step to adapt to growing sequence
             for _ in range(max_new_tokens):
-                outputs = self.forward(generated, attention_mask=attention_mask)
+                # Skip gating computation if forced expert routing is enabled
+                if self.forced_expert_idx is None:
+                    # Recompute gating probabilities based on current sequence state
+                    gating_input = self._get_embeddings(generated, attention_mask)
+                    gating_probs = self.gating_network(gating_input)
+                    # Always compute shared expert gating probability (required for Qwen2MoE)
+                    shared_gate_prob = self.shared_expert_gating(gating_input)  # Shape: (batch_size, 1)
+                    self._current_gating_probs = gating_probs
+                    self._current_shared_expert_gate_prob = shared_gate_prob
+                    # Forward pass with updated routing (recompute_gating=False since we just computed it)
+                    outputs = self.forward(generated, attention_mask=attention_mask, recompute_gating=False)
+                else:
+                    # Forced expert routing - gating will be handled in forward()
+                    outputs = self.forward(generated, attention_mask=attention_mask, recompute_gating=True)
                 next_token_logits = outputs.logits[:, -1, :]
                 next_token_id = next_token_logits.argmax(dim=-1, keepdim=True)
                 generated = torch.cat([generated, next_token_id], dim=-1)
@@ -338,20 +444,42 @@ class MoEModel(nn.Module):
         if hasattr(self.model, 'norm'):
             state_dict['model.norm.weight'] = self.model.norm.weight.detach()
         
-        gating_weight = self.gating_network.network.weight.detach()
+        # Modify gating weights if forced expert routing is enabled
+        if self.forced_expert_idx is not None:
+            logger.info(f"Modifying gating weights to force routing to expert {self.forced_expert_idx}")
+            # Get original gating weights shape: [num_experts, embedding_dim]
+            original_gating_weight = self.gating_network.network.weight.detach()
+            gating_weight = torch.zeros_like(original_gating_weight)
+            # Set the forced expert's weights to a large positive value so it always wins
+            # The logit for this expert will be: large_value * sum(embedding) = large positive
+            # Set all other experts' weights to zero so their logits are 0
+            # After softmax, the forced expert will have probability ~1.0
+            gating_weight[self.forced_expert_idx, :] = 100.0  # Large positive value for all embedding dimensions
+            # All other experts already have zero weights (will output 0 logits)
+            logger.info(f"Gating weights modified: expert {self.forced_expert_idx} will always be selected (logit ~100*sum(emb), others ~0)")
+        else:
+            gating_weight = self.gating_network.network.weight.detach()
         
         for layer_idx, layer in enumerate(layers):
-            # Save attention weights
+            # Save attention weights and biases
             if hasattr(layer, 'self_attn'):
                 attn = layer.self_attn
                 if hasattr(attn, 'q_proj'):
                     state_dict[f'model.layers.{layer_idx}.self_attn.q_proj.weight'] = attn.q_proj.weight.detach()
+                    if attn.q_proj.bias is not None:
+                        state_dict[f'model.layers.{layer_idx}.self_attn.q_proj.bias'] = attn.q_proj.bias.detach()
                 if hasattr(attn, 'k_proj'):
                     state_dict[f'model.layers.{layer_idx}.self_attn.k_proj.weight'] = attn.k_proj.weight.detach()
+                    if attn.k_proj.bias is not None:
+                        state_dict[f'model.layers.{layer_idx}.self_attn.k_proj.bias'] = attn.k_proj.bias.detach()
                 if hasattr(attn, 'v_proj'):
                     state_dict[f'model.layers.{layer_idx}.self_attn.v_proj.weight'] = attn.v_proj.weight.detach()
+                    if attn.v_proj.bias is not None:
+                        state_dict[f'model.layers.{layer_idx}.self_attn.v_proj.bias'] = attn.v_proj.bias.detach()
                 if hasattr(attn, 'o_proj'):
                     state_dict[f'model.layers.{layer_idx}.self_attn.o_proj.weight'] = attn.o_proj.weight.detach()
+                    if attn.o_proj.bias is not None:
+                        state_dict[f'model.layers.{layer_idx}.self_attn.o_proj.bias'] = attn.o_proj.bias.detach()
                 if hasattr(attn, 'q_norm'):
                     state_dict[f'model.layers.{layer_idx}.self_attn.q_norm.weight'] = attn.q_norm.weight.detach()
                 if hasattr(attn, 'k_norm'):
@@ -372,30 +500,26 @@ class MoEModel(nn.Module):
                         state_dict[f'model.layers.{layer_idx}.mlp.experts.{expert_idx}.down_proj.weight'] = expert_mlp.down_proj.weight.detach()
                 
                 state_dict[f'model.layers.{layer_idx}.mlp.gate.weight'] = gating_weight.clone()
-                
-                if self.use_shared_expert and self.shared_expert_model is not None:
-                    if hasattr(self.shared_expert_model, 'model') and hasattr(self.shared_expert_model.model, 'layers'):
-                        shared_layers = self.shared_expert_model.model.layers
-                    elif hasattr(self.shared_expert_model, 'layers'):
-                        shared_layers = self.shared_expert_model.layers
-                    else:
-                        raise ValueError("Unsupported shared expert model architecture")
-                    
-                    shared_layer = shared_layers[layer_idx]
-                    if hasattr(shared_layer, 'mlp'):
-                        shared_mlp = shared_layer.mlp
-                        if hasattr(shared_mlp, 'gate_proj'):
-                            state_dict[f'model.layers.{layer_idx}.mlp.shared_expert.gate_proj.weight'] = shared_mlp.gate_proj.weight.detach()
-                        if hasattr(shared_mlp, 'up_proj'):
-                            state_dict[f'model.layers.{layer_idx}.mlp.shared_expert.up_proj.weight'] = shared_mlp.up_proj.weight.detach()
-                        if hasattr(shared_mlp, 'down_proj'):
-                            state_dict[f'model.layers.{layer_idx}.mlp.shared_expert.down_proj.weight'] = shared_mlp.down_proj.weight.detach()
-                    
-                    if self.shared_expert_gating is not None:
-                        shared_gating_weight = self.shared_expert_gating.network.weight.detach()
-                        shared_gating_weight_zeroed = shared_gating_weight.squeeze(0).clone()
-                        shared_gating_weight_zeroed.fill_(-100.0)
-                        state_dict[f'model.layers.{layer_idx}.mlp.shared_expert_gate.weight'] = shared_gating_weight_zeroed
+
+                # Qwen2MoE always requires shared expert - force all weights to exactly zero
+                first_expert = layer.mlp.expert_mlps[0]
+                if hasattr(first_expert, 'gate_proj'):
+                    gate_shape = first_expert.gate_proj.weight.shape
+                    state_dict[f'model.layers.{layer_idx}.mlp.shared_expert.gate_proj.weight'] = torch.zeros(gate_shape, dtype=first_expert.gate_proj.weight.dtype)
+                if hasattr(first_expert, 'up_proj'):
+                    up_shape = first_expert.up_proj.weight.shape
+                    state_dict[f'model.layers.{layer_idx}.mlp.shared_expert.up_proj.weight'] = torch.zeros(up_shape, dtype=first_expert.up_proj.weight.dtype)
+                if hasattr(first_expert, 'down_proj'):
+                    down_shape = first_expert.down_proj.weight.shape
+                    state_dict[f'model.layers.{layer_idx}.mlp.shared_expert.down_proj.weight'] = torch.zeros(down_shape, dtype=first_expert.down_proj.weight.dtype)
+                logger.info(f"Created zero-initialized shared expert for layer {layer_idx}" if layer_idx == 0 else "")
+
+                # Always save shared expert gating (required for Qwen2MoE)
+                # Set to very negative values so sigmoid outputs ~0 (never use shared expert)
+                shared_gating_weight = self.shared_expert_gating.network.weight.detach()
+                # Force to very negative to ensure sigmoid(x) ≈ 0
+                shared_gating_weight_forced = torch.full_like(shared_gating_weight, -20.0)
+                state_dict[f'model.layers.{layer_idx}.mlp.shared_expert_gate.weight'] = shared_gating_weight_forced
         
         if self.lm_head is not None:
             state_dict['lm_head.weight'] = self.lm_head.weight.detach().clone()
@@ -408,29 +532,42 @@ class MoEModel(nn.Module):
             logger.warning("safetensors not available, saving as PyTorch .bin file")
             torch.save(state_dict, str(save_directory / "pytorch_model.bin"))
         
+        # Save tokenizer with all configuration files
+        logger.info("Saving tokenizer...")
         self.tokenizer.save_pretrained(str(save_directory))
+
+        # Ensure tokenizer_config.json includes fix_mistral_regex if applicable
+        tokenizer_config_path = save_directory / "tokenizer_config.json"
+        if tokenizer_config_path.exists():
+            import json
+            with open(tokenizer_config_path, 'r') as f:
+                tokenizer_config = json.load(f)
+            # Ensure clean_up_tokenization_spaces is set for compatibility
+            if 'clean_up_tokenization_spaces' not in tokenizer_config:
+                tokenizer_config['clean_up_tokenization_spaces'] = False
+            with open(tokenizer_config_path, 'w') as f:
+                json.dump(tokenizer_config, f, indent=2)
+            logger.info("Updated tokenizer configuration")
+
         self.gating_network.save_pretrained(str(save_directory / "gating"))
         
-        if self.use_shared_expert and self.shared_expert_gating is not None:
-            self.shared_expert_gating.save_pretrained(str(save_directory / "gating"))
-            logger.info("Saved shared expert gating network")
+        # Always save shared expert gating (required for Qwen2MoE)
+        self.shared_expert_gating.save_pretrained(str(save_directory / "gating"))
+        logger.info("Saved shared expert gating network")
         
         base_config = self.config.to_dict() if hasattr(self.config, 'to_dict') else dict(self.config)
         
-        if self.target_architecture == "qwen3moe":
-            base_config['architectures'] = ['Qwen3MoeForCausalLM']
-            base_config['model_type'] = 'qwen3moe'
-            logger.info("Saving as Qwen3MoeForCausalLM (no shared experts, optional k_norm/q_norm)")
-        elif self.target_architecture == "qwen2moe":
-            base_config['architectures'] = ['Qwen2MoeForCausalLM']
-            base_config['model_type'] = 'qwen2moe'
-            logger.info("Saving as Qwen2MoeForCausalLM (requires shared experts)")
-        else:
-            raise ValueError(f"Unknown target_architecture: {self.target_architecture}")
+        # Qwen2MoE always requires shared experts
+        # Use qwen2_moe (with underscore) for transformers compatibility
+        base_config['architectures'] = ['Qwen2MoeForCausalLM']
+        base_config['model_type'] = 'qwen2_moe'
+        logger.info("Saving as Qwen2MoeForCausalLM (requires shared experts)")
         
         base_config['num_experts'] = num_experts
         
-        if self.routing_mode == "select_one":
+        if self.num_experts_per_tok is not None:
+            base_config['num_experts_per_tok'] = self.num_experts_per_tok
+        elif self.routing_mode == "select_one":
             base_config['num_experts_per_tok'] = 1
         elif self.routing_mode == "weighted_sum":
             base_config['num_experts_per_tok'] = min(2, num_experts)
@@ -439,14 +576,20 @@ class MoEModel(nn.Module):
         if moe_intermediate_size is not None:
             base_config['moe_intermediate_size'] = moe_intermediate_size
         
-        if self.use_shared_expert:
+        # Qwen2MoE always requires shared expert
+        if self.use_zero_shared_expert or self.shared_expert_model is None:
+            # Use same intermediate size as regular experts
+            shared_expert_intermediate_size = moe_intermediate_size
+            base_config['shared_expert_intermediate_size'] = shared_expert_intermediate_size
+            logger.info(f"Shared expert intermediate size (zero-initialized): {shared_expert_intermediate_size}")
+        else:
             if hasattr(self.shared_expert_model, 'model') and hasattr(self.shared_expert_model.model, 'layers'):
                 shared_layer = self.shared_expert_model.model.layers[0]
             elif hasattr(self.shared_expert_model, 'layers'):
                 shared_layer = self.shared_expert_model.layers[0]
             else:
                 shared_layer = None
-            
+
             if shared_layer and hasattr(shared_layer, 'mlp') and hasattr(shared_layer.mlp, 'gate_proj'):
                 shared_expert_intermediate_size = shared_layer.mlp.gate_proj.out_features
                 base_config['shared_expert_intermediate_size'] = shared_expert_intermediate_size
@@ -454,7 +597,7 @@ class MoEModel(nn.Module):
         
         if 'tie_word_embeddings' not in base_config:
             base_config['tie_word_embeddings'] = False
-        
+
         with open(save_directory / "config.json", "w") as f:
             json.dump(base_config, f, indent=2)
         

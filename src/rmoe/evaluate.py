@@ -127,7 +127,7 @@ def evaluate_qmsum(model, tokenizer, dataset, device=None, max_new_tokens=200, t
             input_text = example.get("input", "")
             prompt = f"{context}\n\n{input_text}" if context and input_text else (input_text or context)
             prompt = f"{prompt}\n\nSummary:"
-            inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
+            inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=32768)
             inputs = {k: v.to(gen_device) for k, v in inputs.items()}
             input_ids_len = inputs['input_ids'].shape[1]
             with torch.no_grad():

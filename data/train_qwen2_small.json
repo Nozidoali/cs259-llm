@@ -1,13 +1,13 @@
 {
   "method": "rmoe",
   "base_model": "Qwen/Qwen2-0.5B-Instruct",
-  "datasets": ["truthfulqa", "truthfulqa", "truthfulqa", "truthfulqa", "truthfulqa", "truthfulqa", "qmsum"],
+  "datasets": ["truthfulqa"],
   "seed": 42,
   "comment": "Full RMoE pipeline configuration for Qwen2-0.5B-Instruct",
-  
+
   "expert_training": {
     "comment": "Train one expert per dataset",
-    "num_epochs": 1,
+    "num_epochs": 0,
     "batch_size": 2,
     "gradient_accumulation_steps": 8,
     "learning_rate": 5e-5,
@@ -24,10 +24,9 @@
     "logging_steps": 50,
     "fp16": true
   },
-  
+
   "gating": {
     "comment": "Gating network WITHOUT bias (required for Qwen2MoE compatibility)",
-    "hidden_dims": [512, 256],
     "dropout": 0.1,
     "learning_rate": 1e-4,
     "batch_size": 32,
@@ -70,7 +69,7 @@
     "comment_output_type": "Options: f16, f32, q4_0, q4_1, q5_0, q5_1, q8_0",
     "verify_conversion": true
   },
-  
+
   "quantize": "q8_0",
   "comment_quantize": "Quantization type for final GGUF model. Options: Q4_0, Q4_K_M, Q5_K_M, Q8_0, etc.",
   

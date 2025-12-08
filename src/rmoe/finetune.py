@@ -121,38 +121,50 @@ def train_expert(
         early_stopping_threshold=0.0
     )
     
-    trainer = MultiDatasetEvalTrainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset_split,
-        eval_dataset=eval_dataset_split,
-        eval_datasets=eval_datasets,
-        data_collator=data_collator,
-        tokenizer=tokenizer,
-        model_type="causal",
-        qmsum_max_new_tokens=qmsum_max_new_tokens,
-        temperature=temperature,
-        callbacks=[early_stopping_callback],
-        l2_regularization=l2_regularization,
-    )
-    
-    # Run initial evaluation before training to establish baseline
-    logger.info("Running initial evaluation before training (Epoch 0)...")
-    model.eval()
-    initial_metrics = trainer.evaluate()
-    logger.info(f"Initial evaluation results (before training): {initial_metrics}")
-    
-    logger.info("Starting training...")
-    trainer.train()
-    logger.info(f"Saving model to: {output_dir}")
-    trainer.save_model()
-    tokenizer.save_pretrained(str(output_dir))
-    logger.info("Evaluating on all datasets...")
-    model.eval()
-    final_results = evaluate_all_datasets(model, tokenizer, eval_datasets, device, qmsum_max_new_tokens, temperature)
-    logger.info(f"Final evaluation results: {final_results}")
-    
-    del model, trainer, tokenizer
+    # Check if num_epochs is 0 - if so, skip training and use base model directly
+    if num_epochs == 0:
+        logger.info("num_epochs is 0 - skipping training, using base model directly as expert")
+        logger.info("Skipping initial evaluation")
+        logger.info("Skipping training phase")
+        logger.info("Skipping final evaluation")
+        logger.info(f"Saving base model to: {output_dir}")
+        model.save_pretrained(str(output_dir))
+        tokenizer.save_pretrained(str(output_dir))
+    else:
+        trainer = MultiDatasetEvalTrainer(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset_split,
+            eval_dataset=eval_dataset_split,
+            eval_datasets=eval_datasets,
+            data_collator=data_collator,
+            tokenizer=tokenizer,
+            model_type="causal",
+            qmsum_max_new_tokens=qmsum_max_new_tokens,
+            temperature=temperature,
+            callbacks=[early_stopping_callback],
+            l2_regularization=l2_regularization,
+        )
+
+        # Run initial evaluation before training to establish baseline
+        logger.info("Running initial evaluation before training (Epoch 0)...")
+        model.eval()
+        initial_metrics = trainer.evaluate()
+        logger.info(f"Initial evaluation results (before training): {initial_metrics}")
+
+        logger.info("Starting training...")
+        trainer.train()
+        logger.info(f"Saving model to: {output_dir}")
+        trainer.save_model()
+        tokenizer.save_pretrained(str(output_dir))
+        logger.info("Evaluating on all datasets...")
+        model.eval()
+        final_results = evaluate_all_datasets(model, tokenizer, eval_datasets, device, qmsum_max_new_tokens, temperature)
+        logger.info(f"Final evaluation results: {final_results}")
+
+        del trainer
+
+    del model, tokenizer
     if use_cuda:
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
