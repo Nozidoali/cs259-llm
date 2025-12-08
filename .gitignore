@@ -74,3 +74,6 @@ downloaded_models/
 
 # benchmark results
 benchmark_results/
+
+base_models/    
+imatrix/

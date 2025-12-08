@@ -147,6 +147,23 @@ Examples:
         else:
             logger.info("Skipping expert training (--skip-experts flag)")
             expert_paths = [work_dir / "experts" / d for d in datasets]
+        
+        # Convert individual expert models to GGUF before merging
+        if not args.skip_convert:
+            logger.info(f"=" * 60)
+            logger.info("Converting individual expert models to GGUF")
+            logger.info(f"=" * 60)
+            quantize_level = config.get("quantize", QUANTIZE_LEVEL)
+            for expert_path, dataset_name in zip(expert_paths, datasets):
+                expert_gguf_path = work_dir / f"moe_{dataset_name}_{quantize_level}.gguf"
+                logger.info(f"Converting expert '{dataset_name}' to GGUF: {expert_gguf_path}")
+                try:
+                    convert_to_gguf(expert_path, expert_gguf_path, quantize_level)
+                    logger.info(f"✓ Expert '{dataset_name}' GGUF saved to: {expert_gguf_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to convert expert '{dataset_name}' to GGUF: {e}")
+            logger.info(f"=" * 60)
+        
         gating_output_dir = work_dir / "gating_network"
         gating_exists = gating_output_dir.exists() and (gating_output_dir / "gating_network.pt").exists()
         
