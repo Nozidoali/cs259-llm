@@ -1,4 +1,4 @@
-# H100 GPU Training Configuration
+# A100/H100 GPU Training Configuration
 
 ## Problem
 When running training on GPU servers (H100, A100, etc.), TensorFlow (used by BLEURT for evaluation) was initializing CUDA before PyTorch, causing conflicts and the error:
@@ -6,14 +6,22 @@ When running training on GPU servers (H100, A100, etc.), TensorFlow (used by BLE
 CUDA error: Failed call to cuInit: CUDA_ERROR_UNKNOWN: unknown error
 ```
 
-## Solution
-The fix ensures that **PyTorch initializes CUDA FIRST** and claims the H100 GPU for training, while TensorFlow uses CPU only for BLEURT evaluation.
+## Solution (Based on working `alice/rmoe` branch)
+The fix allows **both PyTorch and TensorFlow to share the GPU** using TensorFlow's memory growth feature. This is the approach that worked on A100 and H100.
 
 **Key Strategy:**
-1. **PyTorch initializes CUDA immediately** when train.py starts - claims H100 GPU
-2. **TensorFlow is configured via Python API** (`tf.config.set_visible_devices([], 'GPU')`) to use CPU only
-3. **Warnings are NOT suppressed** - you can see the full status of GPU initialization
-4. **No environment variable modification after import** - prevents PyTorch confusion
+1. **TensorFlow memory growth enabled** - TensorFlow doesn't allocate all GPU memory at once
+2. **Both frameworks share GPU** - PyTorch for training, TensorFlow for BLEURT evaluation
+3. **Environment variables set BEFORE imports** - Proper initialization order
+4. **No GPU hiding** - Both frameworks can see and use the GPU cooperatively
+
+**Configuration:**
+```python
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+os.environ['TF_GPU_ALLOCATOR'] = 'cuda_malloc_async'
+os.environ["USE_TF"] = "0"  # Disable TensorFlow in transformers
+os.environ["USE_TORCH"] = "1"  # Use PyTorch only
+```
 
 ## Changes Made
 

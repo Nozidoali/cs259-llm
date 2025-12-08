@@ -40,21 +40,8 @@ class MultiDatasetEvalTrainer(Trainer):
     @property
     def bleurt(self):
         if self._bleurt is None:
-            import logging
-            logger = logging.getLogger(__name__)
-            
-            # Import and configure TensorFlow to use CPU only
-            # PyTorch has already claimed the GPU, so TensorFlow must use CPU
-            import tensorflow as tf
-            
-            # Hide all GPUs from TensorFlow - PyTorch is using them
-            tf.config.set_visible_devices([], 'GPU')
-            logger.info("Loading BLEURT model (TensorFlow will use CPU for evaluation)...")
-            
             import evaluate
             self._bleurt = evaluate.load("bleurt", BLEURT_CONFIG["model_name"])
-            logger.info("BLEURT model loaded successfully on CPU")
-                
         return self._bleurt
     
     @property
