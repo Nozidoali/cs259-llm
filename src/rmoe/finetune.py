@@ -1,4 +1,9 @@
 import os
+
+# Set environment variables before importing transformers
+os.environ["USE_TF"] = "0"  # Disable TensorFlow in transformers
+os.environ["USE_TORCH"] = "1"  # Use PyTorch only
+
 import torch
 import logging
 from pathlib import Path

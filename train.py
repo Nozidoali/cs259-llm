@@ -7,12 +7,16 @@ import sys
 import logging
 from pathlib import Path
 from datetime import datetime
+
+# Set environment variables before importing transformers
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["USE_TF"] = "0"  # Disable TensorFlow in transformers
+os.environ["USE_TORCH"] = "1"  # Use PyTorch only
+
 import torch
 from transformers import TrainingArguments, DataCollatorForLanguageModeling, Trainer
 from datasets import concatenate_datasets
-
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
