@@ -83,7 +83,6 @@ Examples:
     timestamp = os.getenv("WORKSPACE_TIMESTAMP")
     timestamp_from_env = timestamp is not None
     if not timestamp:
-        from datetime import datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     work_dir = WORK_DIR / "workspace" / timestamp
