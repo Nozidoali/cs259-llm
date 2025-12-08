@@ -41,8 +41,8 @@ cd /workspace/cs259-llm
 
 # Sync branch
 git fetch origin
-git checkout alice/rmoe
-git reset --hard origin/alice/rmoe
+git checkout final
+git reset --hard origin/final
 git pull
 git submodule update --init --recursive
 
@@ -122,7 +122,7 @@ fi
 # Training
 ###############################
 
-python train.py data/train_rmoe.json
+python train.py data/train_qwen2_large.json --conversion-mode preserve_moe 
 echo 'Training completed.'
 
 # Keep container alive
