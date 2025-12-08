@@ -15,6 +15,9 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["USE_TF"] = "0"  # Disable TensorFlow in transformers
 os.environ["USE_TORCH"] = "1"  # Use PyTorch only
 
+# Configure PyTorch memory management
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"  # Reduce memory fragmentation
+
 # Configure TensorFlow to share GPU with PyTorch (memory growth mode)
 # This allows both PyTorch and TensorFlow to use the GPU without conflicts
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
@@ -294,11 +297,23 @@ Examples:
                 
                 logger.info(f"Moving model to device: {device}")
                 model = model.to(device)
+                
+                # Clear memory after moving to device
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+                    logger.info(f"GPU memory after moving to device: {torch.cuda.memory_allocated() / 1024**3:.2f} GB / {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+                
                 for param in model.parameters():
                     param.requires_grad = True
+                
+                # Enable gradient checkpointing to save memory
                 if hasattr(model, "gradient_checkpointing_enable"):
                     model.gradient_checkpointing_enable()
                     logger.info("Gradient checkpointing enabled")
+                else:
+                    logger.warning("Gradient checkpointing not available for this model")
                 
                 model.train()
                 train_datasets = []

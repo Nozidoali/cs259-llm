@@ -174,15 +174,53 @@ if finetune_longbench:
 3. **No BLEURT**: Fine-tuning uses standard training loss, no BLEURT evaluation overhead
 4. **Explicit logging**: Shows memory usage at each step for debugging
 
+## Additional Fixes for Training Step OOM
+
+### 5. Reduced Batch Size to 1
+**File:** `data/train_qwen2_large.json`
+
+Changed batch size from 2 to 1 and increased gradient accumulation:
+```json
+"full_finetune": {
+  "batch_size": 1,  // ← MUST be 1 for large MoE models
+  "gradient_accumulation_steps": 16,  // ← Increased from 8
+  ...
+}
+```
+
+**Effective batch size:** 1 × 16 = 16 (same training dynamics, less memory)
+
+### 6. Memory Fragmentation Fix
+**File:** `train.py`
+
+Added PyTorch memory management setting:
+```python
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+```
+
+**Impact:** Reduces memory fragmentation, allows better memory utilization.
+
+### 7. Additional Memory Clearing After Moving to Device
+**File:** `train.py`
+
+Clear memory after moving model to GPU:
+```python
+model = model.to(device)
+gc.collect()
+torch.cuda.empty_cache()
+torch.cuda.synchronize()
+```
+
 ## Troubleshooting
 
 If OOM still occurs during fine-tuning:
 
 1. **Check memory logs**: Look for "GPU memory before loading" - should be near 0 GB
-2. **Reduce batch size**: Change from 2 to 1 in config
+2. **Verify batch size is 1**: Must be 1 for large MoE models
 3. **Disable qmsum**: Set `finetune_longbench: false`
 4. **Reduce fine-tuning epochs**: Lower from 100 to smaller number
-5. **Check other processes**: Ensure no other processes using GPU memory
+5. **Reduce max_length**: Lower from 512 to 256 or 384
+6. **Check other processes**: Ensure no other processes using GPU memory
 
 ## Related Files
 
