@@ -132,11 +132,20 @@ Examples:
         sys.exit(1)
     try:
         datasets = config.get("datasets", ["truthfulqa", "longbench"])
-        expert_paths = []
         expert_config = config.get("expert_training", {})
         
+        # Optimization: Get unique datasets to avoid retraining identical experts
+        unique_datasets = list(dict.fromkeys(datasets))  # Preserves order, removes duplicates
+        logger.info(f"Total experts requested: {len(datasets)}")
+        logger.info(f"Unique datasets: {len(unique_datasets)} - {unique_datasets}")
+        if len(unique_datasets) < len(datasets):
+            logger.info(f"Optimization: Training only {len(unique_datasets)} unique expert(s), will reuse for {len(datasets)} slots")
+        
+        # Train only unique experts
+        trained_experts = {}  # Map dataset_name -> expert_path
+        
         if not args.skip_experts:
-            for dataset_name in datasets:
+            for dataset_name in unique_datasets:
                 expert_output_dir = work_dir / "experts" / dataset_name
                 expert_exists = expert_output_dir.exists() and (expert_output_dir / "config.json").exists()
                 
@@ -152,7 +161,7 @@ Examples:
                         base_model_path=base_model_path,
                         dataset_name=dataset_name,
                         output_dir=expert_output_dir,
-                        all_datasets=datasets,
+                        all_datasets=unique_datasets,  # Use unique datasets for evaluation
                         max_length=expert_config.get("max_length", 512),
                         num_epochs=expert_config.get("num_epochs", 3),
                         batch_size=expert_config.get("batch_size", 1),
@@ -173,10 +182,15 @@ Examples:
                         torch.cuda.synchronize()
                     gc.collect()
                 
-                expert_paths.append(expert_output_dir)
+                trained_experts[dataset_name] = expert_output_dir
         else:
             logger.info("Skipping expert training (--skip-experts flag)")
-            expert_paths = [work_dir / "experts" / d for d in datasets]
+            for dataset_name in unique_datasets:
+                trained_experts[dataset_name] = work_dir / "experts" / dataset_name
+        
+        # Create expert_paths list by mapping each dataset to its trained expert
+        expert_paths = [trained_experts[dataset_name] for dataset_name in datasets]
+        logger.info(f"Expert paths created: {len(expert_paths)} experts (reusing {len(unique_datasets)} unique model(s))")
         gating_output_dir = work_dir / "gating_network"
         gating_exists = gating_output_dir.exists() and (gating_output_dir / "gating_network.pt").exists()
         
@@ -318,27 +332,21 @@ Examples:
                 model.train()
                 train_datasets = []
                 
-                # Check if we should fine-tune with longbench (default: true, limited to 50 samples)
+                # Fine-tuning uses ONLY longbench/qmsum (not truthfulqa)
+                # finetune_longbench flag: if True, use 50 qmsum samples; if False, skip fine-tuning
                 finetune_longbench = finetune_config.get("finetune_longbench", True)
                 
-                for dataset_name in datasets:
-                    if dataset_name == "truthfulqa":
-                        ds = prepare_truthfulqa_dataset(tokenizer, max_length=finetune_config.get("max_length", 512), keep_metadata=False, model_type="causal")
-                        train_datasets.append(ds)
-                        logger.info(f"Added truthfulqa dataset: {len(ds)} samples")
-                    elif dataset_name in ["longbench", "qmsum"]:
-                        if finetune_longbench:
-                            # Use only 50 qmsum samples for fine-tuning to save memory and time
-                            ds = prepare_qmsum_dataset(tokenizer, max_length=finetune_config.get("max_length", 512), keep_metadata=False, model_type="causal", num_samples=50)
-                            train_datasets.append(ds)
-                            logger.info(f"Added qmsum dataset: {len(ds)} samples (limited to 50)")
-                        else:
-                            logger.info(f"Skipping qmsum dataset (finetune_longbench=False)")
-                    else:
-                        continue
+                if finetune_longbench:
+                    # Use only 50 qmsum samples for fine-tuning to save memory and time
+                    logger.info("Fine-tuning dataset: longbench/qmsum only (no truthfulqa)")
+                    ds = prepare_qmsum_dataset(tokenizer, max_length=finetune_config.get("max_length", 512), keep_metadata=False, model_type="causal", num_samples=50)
+                    train_datasets.append(ds)
+                    logger.info(f"Added qmsum dataset: {len(ds)} samples (limited to 50)")
+                else:
+                    logger.info("Skipping fine-tuning (finetune_longbench=False)")
                 
                 if not train_datasets:
-                    logger.error("No datasets selected for fine-tuning!")
+                    logger.error("No datasets selected for fine-tuning! Set finetune_longbench=True to use qmsum.")
                     raise ValueError("No datasets selected for fine-tuning")
                 
                 combined_dataset = concatenate_datasets(train_datasets)

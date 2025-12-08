@@ -50,18 +50,19 @@ if torch.cuda.is_available():
 ### 3. Added `finetune_longbench` Flag
 **Files:** `train.py`, `data/train_qwen2_large.json`
 
-New config option to control qmsum inclusion in fine-tuning:
+New config option to control fine-tuning dataset:
 ```json
 "full_finetune": {
   "enabled": true,
   "finetune_longbench": true,
-  "comment_finetune_longbench": "Include qmsum/longbench (limited to 50 samples). Set to false to only use truthfulqa.",
+  "comment_finetune_longbench": "If true: use ONLY qmsum (50 samples). If false: skip fine-tuning.",
   ...
 }
 ```
 
-**Default:** `true` (includes qmsum with 50 samples)  
-**Set to `false`:** Only uses truthfulqa for fine-tuning
+**IMPORTANT:** Fine-tuning uses **ONLY longbench/qmsum**, NOT truthfulqa!
+- **`true`** (default): Use 50 qmsum samples for fine-tuning
+- **`false`**: Skip fine-tuning entirely
 
 ### 4. Limited qmsum to 50 Samples for Fine-Tuning
 **File:** `train.py`
@@ -118,15 +119,15 @@ if finetune_longbench:
 2025-12-08 14:30:04 - INFO - GPU memory before loading: 0.05 GB / 79.25 GB
 2025-12-08 14:30:10 - INFO - GPU memory after loading model: 42.15 GB / 79.25 GB
 2025-12-08 14:30:10 - INFO - Moving model to device: cuda
-2025-12-08 14:30:15 - INFO - Added truthfulqa dataset: 200 samples
+2025-12-08 14:30:15 - INFO - Fine-tuning dataset: longbench/qmsum only (no truthfulqa)
 2025-12-08 14:30:16 - INFO - Added qmsum dataset: 50 samples (limited to 50)
-2025-12-08 14:30:16 - INFO - Total train samples: 200, Eval samples: 50
+2025-12-08 14:30:16 - INFO - Total train samples: 40, Eval samples: 10
 [Fine-tuning proceeds successfully]
 ```
 
 ## Configuration Options
 
-### Option 1: Fine-tune with qmsum (Default)
+### Option 1: Fine-tune with qmsum ONLY (Default)
 ```json
 "full_finetune": {
   "enabled": true,
@@ -134,10 +135,11 @@ if finetune_longbench:
   ...
 }
 ```
-- Uses truthfulqa + 50 qmsum samples
-- Total: ~250 samples for fine-tuning
+- Uses **ONLY 50 qmsum samples** (no truthfulqa!)
+- Total: 50 samples for fine-tuning
+- Recommended for longbench task performance
 
-### Option 2: Fine-tune with truthfulqa only
+### Option 2: Disable fine-tuning
 ```json
 "full_finetune": {
   "enabled": true,
@@ -145,10 +147,7 @@ if finetune_longbench:
   ...
 }
 ```
-- Uses only truthfulqa dataset
-- Faster, uses less memory
-
-### Option 3: Disable fine-tuning
+OR
 ```json
 "full_finetune": {
   "enabled": false,
@@ -157,6 +156,8 @@ if finetune_longbench:
 ```
 - Skip fine-tuning entirely
 - Use merged MoE model as-is
+
+**Note:** Fine-tuning dataset is separate from expert training datasets. Expert training uses the `datasets` list (e.g., 32 truthfulqa experts), but fine-tuning uses only longbench/qmsum.
 
 ## Memory Savings
 

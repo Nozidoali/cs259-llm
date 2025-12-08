@@ -1,6 +1,7 @@
 {
   "method": "rmoe",
   "base_model": "Qwen/Qwen2-0.5B-Instruct",
+  "comment_datasets": "List of datasets for expert training. Duplicates are automatically optimized: only unique datasets are trained once, then reused for all slots. Example: 32x 'truthfulqa' trains ONE expert, reused 32 times.",
   "datasets": [
     "truthfulqa",
     "truthfulqa",
@@ -82,7 +83,7 @@
     "comment": "Optional: Fine-tune the merged MoE model end-to-end",
     "enabled": true,
     "finetune_longbench": true,
-    "comment_finetune_longbench": "Include qmsum/longbench in fine-tuning (limited to 50 samples). Set to false to only use truthfulqa.",
+    "comment_finetune_longbench": "If true: use ONLY qmsum/longbench (50 samples) for fine-tuning. If false: skip fine-tuning. NOTE: Fine-tuning uses ONLY longbench, NOT truthfulqa.",
     "num_epochs": 100,
     "batch_size": 1,
     "comment_batch_size": "MUST be 1 for large MoE models to avoid OOM",
