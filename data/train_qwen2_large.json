@@ -111,7 +111,7 @@
   },
   "advanced": {
     "comment": "Advanced options for debugging and optimization",
-    "device": "auto",
+    "device": "cuda",
     "comment_device": "Options: 'auto', 'cuda', 'cpu', 'mps'",
     "gradient_checkpointing": false,
     "mixed_precision": "fp16",

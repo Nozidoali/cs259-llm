@@ -19,8 +19,8 @@ mkdir -p /root/.ssh
 chmod 700 /root/.ssh
 
 # Add SSH public key from environment variable
-if [ -n "\$SSH_PUBKEY" ]; then
-  echo "\$SSH_PUBKEY" >> /root/.ssh/authorized_keys
+if [ -n \"\$SSH_PUBKEY\" ]; then
+  echo \"\$SSH_PUBKEY\" >> /root/.ssh/authorized_keys
   echo 'SSH public key added from SSH_PUBKEY environment variable.'
 else
   echo 'Warning: SSH_PUBKEY not set. No SSH key added.'
