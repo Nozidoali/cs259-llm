@@ -9,27 +9,29 @@ CUDA error: Failed call to cuInit: CUDA_ERROR_UNKNOWN: unknown error
 ## Solution
 The fix ensures that TensorFlow uses **CPU only** while PyTorch has exclusive access to the GPU for training.
 
+**Key Insight:** We use TensorFlow's Python API (`tf.config.set_visible_devices([], 'GPU')`) to hide GPUs from TensorFlow instead of modifying `CUDA_VISIBLE_DEVICES` environment variable, which would confuse PyTorch after it has already initialized.
+
 ## Changes Made
 
-### 1. `train.py` - Early TensorFlow Configuration
-Added environment variables at the very top (before any imports) to configure TensorFlow:
+### 1. `train.py` - Suppress TensorFlow Warnings
+Added environment variable to suppress TensorFlow logging:
 ```python
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
 ```
 
 ### 2. `src/rmoe/trainer.py` - BLEURT Loading Fix
-Updated the BLEURT loading to temporarily force TensorFlow to use CPU:
-- Sets `CUDA_VISIBLE_DEVICES=""` before loading BLEURT
-- Restores original value after loading
-- This ensures TensorFlow doesn't interfere with PyTorch's CUDA usage
+Updated the BLEURT loading to force TensorFlow to use CPU via Python API:
+```python
+import tensorflow as tf
+tf.config.set_visible_devices([], 'GPU')  # Hide all GPUs from TensorFlow
+```
+This ensures TensorFlow doesn't interfere with PyTorch's CUDA usage.
 
 ### 3. `src/rmoe/evaluate.py` - Evaluation Fix
-Applied the same fix to BLEURT loading in evaluation functions.
+Applied the same TensorFlow Python API fix to BLEURT loading in evaluation functions.
 
 ### 4. `src/evaluation.py` - Evaluation Fix
-Applied the same fix to BLEURT loading in the main evaluation module.
+Applied the same TensorFlow Python API fix to BLEURT loading in the main evaluation module.
 
 ### 5. `check_cuda.py` - Diagnostic Tool (NEW)
 Created a diagnostic script to verify CUDA setup before training.

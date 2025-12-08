@@ -2,14 +2,8 @@
 
 import os
 
-# CRITICAL: Set these BEFORE any other imports to prevent TensorFlow/JAX from grabbing CUDA
-# This fixes CUDA conflicts on GPU servers (H100, A100, etc.)
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # Suppress TensorFlow warnings
-os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"  # Prevent TF from allocating all GPU memory
-# Force TensorFlow to use CPU only - PyTorch will use GPU
-os.environ["CUDA_VISIBLE_DEVICES_FOR_TF"] = ""  # Custom var to document intent
-# The actual disabling happens below after we check if CUDA should be used
+# Suppress TensorFlow warnings (TensorFlow will be configured to use CPU via Python API when loaded)
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import json
 import argparse
