@@ -15,7 +15,8 @@ def prepare_dataset(dataset_name, tokenizer, max_length, keep_metadata=True):
     if dataset_name == "truthfulqa":
         return prepare_truthfulqa_dataset(tokenizer, max_length=max_length, keep_metadata=keep_metadata, model_type="causal")
     elif dataset_name in ["longbench", "qmsum"]:
-        return prepare_qmsum_dataset(tokenizer, max_length=max_length, keep_metadata=keep_metadata, model_type="causal")
+        # Limit qmsum to 50 samples to avoid OOM
+        return prepare_qmsum_dataset(tokenizer, max_length=max_length, keep_metadata=keep_metadata, model_type="causal", num_samples=50)
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 

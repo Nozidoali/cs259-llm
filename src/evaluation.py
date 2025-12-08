@@ -4,7 +4,9 @@ import re
 import time
 import subprocess
 import logging
+import gc
 import numpy as np
+import torch
 from pathlib import Path
 from datasets import load_dataset as hf_load_dataset
 import evaluate
@@ -116,6 +118,16 @@ def get_truthfulqa_score(script_path="./scripts/run-cli.sh", num_samples=100, nu
     avg_max_score = np.mean(max_score_arr) if max_score_arr else 0.0
     accuracy = np.mean(acc_score_arr) if acc_score_arr else 0.0
     logger.info(f"TruthfulQA complete - Avg max_score: {avg_max_score:.3f}, Avg accuracy: {accuracy:.3f}")
+    
+    # Unload BLEURT to free GPU memory
+    logger.info("Unloading BLEURT to free GPU memory...")
+    del bleurt
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+    logger.info("BLEURT unloaded, GPU memory freed")
+    
     return avg_max_score, accuracy
 
 def load_longbench_references():

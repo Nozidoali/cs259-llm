@@ -37,12 +37,31 @@ class MultiDatasetEvalTrainer(Trainer):
             return self.processing_class
         return getattr(self, 'tokenizer', None)
     
-    @property
-    def bleurt(self):
+    def load_bleurt(self):
+        """Load BLEURT model on-demand"""
         if self._bleurt is None:
             import evaluate
+            logger.info("Loading BLEURT model...")
             self._bleurt = evaluate.load("bleurt", BLEURT_CONFIG["model_name"])
         return self._bleurt
+    
+    def unload_bleurt(self):
+        """Unload BLEURT model to free GPU memory"""
+        if self._bleurt is not None:
+            logger.info("Unloading BLEURT model to free GPU memory...")
+            # Delete BLEURT model
+            del self._bleurt
+            self._bleurt = None
+            # Force garbage collection and clear CUDA cache
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+            logger.info("BLEURT model unloaded, GPU memory freed")
+    
+    @property
+    def bleurt(self):
+        return self.load_bleurt()
     
     @property
     def rouge(self):
@@ -241,6 +260,10 @@ class MultiDatasetEvalTrainer(Trainer):
             logger.info("=" * 80)
         
         self.log(metrics)
+        
+        # Unload BLEURT to free GPU memory for next evaluation
+        self.unload_bleurt()
+        
         return metrics
     
     def _evaluate_qmsum(self, eval_dataset, metric_key_prefix):
@@ -259,12 +282,16 @@ class MultiDatasetEvalTrainer(Trainer):
             input_text = example.get("input", "")
             prompt = f"{context}\n\n{input_text}" if context and input_text else (input_text or context)
             prompt = f"{prompt}\n\nSummary:"
+            # Use 32K context to capture full qmsum documents
             inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=32768)
             inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
             input_ids_len = inputs['input_ids'].shape[1]
             
+            # Clear memory before generation
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+            gc.collect()
             
             with torch.no_grad():
                 try:
@@ -284,15 +311,22 @@ class MultiDatasetEvalTrainer(Trainer):
                         logger.warning(f"Generation failed (OOM): {e}, skipping example")
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
+                            torch.cuda.synchronize()
                         gc.collect()
                         continue
                     else:
                         logger.warning(f"Generation failed: {e}, skipping example")
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                            torch.cuda.synchronize()
+                        gc.collect()
                         continue
                 except Exception as e:
                     logger.warning(f"Generation failed: {e}, skipping example")
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
+                        torch.cuda.synchronize()
+                    gc.collect()
                     continue
             full_sequences = outputs.sequences[0] if hasattr(outputs, "sequences") else outputs[0]
             generated_ids = full_sequences[input_ids_len:]
@@ -313,9 +347,10 @@ class MultiDatasetEvalTrainer(Trainer):
                         "reference": answer[:300] + "..." if len(answer) > 300 else answer
                     })
             
+            # Clean up tensors immediately
             del inputs, outputs, full_sequences, generated_ids, full_text, input_decoded
-            if (idx + 1) % 5 == 0:
-                self._clear_memory()
+            # Clear memory after every example (qmsum contexts are large)
+            self._clear_memory()
         
         self._clear_memory()
         if not predictions:

@@ -103,6 +103,15 @@ def evaluate_truthfulqa(model, tokenizer, dataset, device=None, temperature=0.0)
         accuracy = np.mean(acc_score_arr) if acc_score_arr else 0.0
         return {"bleurt_max_score": avg_max_score, "bleurt_accuracy": accuracy}
     finally:
+        # Unload BLEURT to free GPU memory
+        logger.info("Unloading BLEURT to free GPU memory...")
+        del bleurt
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+        logger.info("BLEURT unloaded, GPU memory freed")
+        
         if model_moved:
             model.to(device)
 
