@@ -1,0 +1,59 @@
+Grad F: Test .
+Postdoc G: OK .
+Professor B: Let 's see , I should be Two .
+PhD D: Up high {disfmarker}
+Grad E: As close to your mouth as you can get it .
+Professor B: La
+PhD D: high as you can get .
+Professor B: Is this channel one ?
+Postdoc G: Yeah , on your upper lip .
+PhD H: Channel one one one .
+Professor B: Gee , OK . Yes . OK .
+Grad E: OK , so for {disfmarker} for {disfmarker} For people wearing the wireless mikes , like {disfmarker} like this one , I find the easiest way to wear it is sorta this {disfmarker} this sorta like that .
+PhD H: This is {disfmarker} chan channel channel one one two three
+Grad F: Channel five , channel five .
+Professor B: Yeah . Mm - hmm . What do you do ,
+Grad E: It 's actually a lot more comfortable then if you try to put it over your temples ,
+Grad F: Test , test test .
+Professor B: you do it higher ?
+Grad E: so {disfmarker}
+Professor B: Mm - hmm .
+PhD D: Adam 's just trying to generate good uh data for the recognizer there .
+Postdoc G: Yeah , I think we 're supposed to {disfmarker} that 's right .
+Grad E: And then also , for {disfmarker} for all of them , if your boom is adjustable , the boom should be towards the corner of your mouth ,
+Grad F: Test test .
+PhD A: By the way , there was a bug . Yeah , i it wasn't using the proper
+PhD D: Oh it was .
+Grad E: and about a uh a thumb to a thumb and a half distance away from your mouth ,
+PhD A: basically it wasn't adapting anything .
+PhD D: Oh .
+Grad E: so about like I 'm wearing it now .
+PhD D: Oh that 's interesting . So why didn't you get the same results and the unadapted ?
+Grad E: so so Jane , you could actually
+...
+ I get some results . So it {disfmarker} it 's a {disfmarker} it 's a project goes over the course of one semester .
+Grad E: Great .
+Grad J: So I 'm just here today to introduce myself . Tell about I 'll be {disfmarker} I 'll be working on this .
+Grad E: And are you staying at Berkeley or is {disfmarker} are you just here a semester ?
+Grad J: This is my second semester and last .
+Grad E: Ah second and last ,
+Professor B: Yeah .
+Grad E: OK .
+Grad J: So I leave
+Professor B: He 's in the {disfmarker} he 's in the cour two two five D course .
+Grad J: Yeah , I 'm in Morgan 's course ,
+Professor B: So , yeah .
+Grad J: yeah .
+Grad E: Good .
+PhD D: Welcome .
+Postdoc G: Then you {disfmarker} then you go back to Norway , that 's OK .
+Grad J: Yeah .
+Grad F: We were just talking about something like this yesterday or yeah yesterday with Liz . About doing some of the {vocalsound} echo cancellation stuff or possibly the spectroanalysis over the overlaps , so . Cool .
+Grad J: Yeah .
+Professor B: OK ,
+Grad E: Digits ?
+Professor B: let 's do digits . OK .
+Grad E: And stop .
+
+[QUESTION]
+What was the general discussion?

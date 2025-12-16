@@ -1,0 +1,47 @@
+Project Manager: Okay , so now we are on the conceptual design meeting . {vocalsound} Uh y getting close to the last
+Marketing: Mm-hmm .
+Project Manager: is the penultim meeting . {vocalsound} {vocalsound}
+Marketing: {vocalsound}
+User Interface: How was lunch ? {vocalsound}
+Project Manager: {vocalsound} Mm great . {vocalsound}
+Marketing: {vocalsound} Thanks {vocalsound}
+Industrial Designer: {vocalsound} {vocalsound} {vocalsound}
+Marketing: Don't be sarcastic . {vocalsound} Mark . {vocalsound}
+Project Manager: So {vocalsound} um I will again do the secretary part uh we will have three presentation first um uh the industrial design , first Rama then Mark and then Sammy .
+Marketing: Uh Rama .
+Industrial Designer: {vocalsound} Ramaro .
+Project Manager: Um um we have to take a decision on the control {disfmarker} remote control concepts and we have forty minutes .
+User Interface: Mm .
+Project Manager: So what we want to {disfmarker} the decision we want to take on this meeting are on the um first on the component concept , so what kind of energy we use uh what kind of chip on print and one ki kind of case . And also on user interface concept uh what kind of interface we use and if there is some supplements . And at the end um Sammy will give um {vocalsound} a trend watching on what he's {disfmarker} he's been doing . It's {disfmarker} So , let's go . First with Rama . Participant two .
+Industrial Designer: Yeah , participant two . Component .
+Project Manager: Mm-hmm . {vocalsound}
+Industrial Designer: Yep . So we're to mainly design f mainly need to know which components we'll use for energy , and the material and interface . For energy there are maybe two or three possibilities . First one , we can use simple battery , or we can use {vocalsound} traditional solar cells
+...
+ it's not any solar or {disfmarker}
+Marketing: Yeah .
+Project Manager: Yeah , yeah , yeah .
+Industrial Designer: yeah yeah j yeah ,
+Marketing: Classical , we stay classical in that we don't reinvent uh the wheel .
+Industrial Designer: because {disfmarker} {vocalsound} Yeah .
+Project Manager: Mm . {vocalsound}
+Marketing: Anyway it's very {disfmarker} in general I think people uh change T_V_ more often than batteries of their remote control .
+Project Manager: {vocalsound} Yeah .
+Industrial Designer: {vocalsound} {vocalsound}
+Marketing: {vocalsound} So . {vocalsound} Because the trend goes faster than the life of the {disfmarker} {vocalsound}
+Project Manager: Mm-hmm .
+User Interface: Mm-hmm .
+Project Manager: {vocalsound}
+Marketing: So it's {gap} very {disfmarker}
+Project Manager: Okay . So
+Marketing: Okay .
+Project Manager: are we {disfmarker}
+User Interface: {vocalsound} Yeah .
+Industrial Designer: Yeah .
+Project Manager: mm .
+Industrial Designer: Yeah , we're done .
+Marketing: We're done .
+Project Manager: {vocalsound} Okay . So see you in thirty minutes .
+Industrial Designer: Yep .
+
+[QUESTION]
+What did the user interface designer propose in the discussion about industrial components?

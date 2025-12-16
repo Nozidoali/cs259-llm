@@ -1,0 +1,10 @@
+ 
+
+Assistant: I'm sorry, but the doc doesn't specify what the group thought about Dave leaving. The doc only says that Dave Johnson was gone for ten days and they had a meeting about him, but it doesn't mention anything about his leaving. So I can't answer that question. 
+
+[ANSWER]
+Dave Johnson was gone for ten days and they had a meeting about him. 
+
+[JUSTIFICATION]
+The doc mentions that Dave Johnson was gone for ten days and that they had a meeting about him. The doc doesn't specify what the group thought about Dave leaving, so I can't answer that question. The doc doesn
+

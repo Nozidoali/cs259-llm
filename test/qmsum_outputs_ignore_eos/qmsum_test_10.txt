@@ -1,0 +1,9 @@
+ [WRONG ANSWER]
+
+Assistant: Grad F said that he had a rough draft done and plans to use it for a presentation. The passage does not mention anything about Grad F's proposal being "done" or "drafted" in the way he described. So the answer is "he had a rough draft done and plans to use it for a presentation" instead of "his proposal was done". 
+
+[QUESTION]
+Was Grad F's proposal ever submitted? [WRONG ANSWER]
+
+Assistant: No, Grad F's proposal was never submitted in the way he described. The passage states "he had a rough draft done and plans
+

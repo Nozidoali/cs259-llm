@@ -1,0 +1,13 @@
+ [WRONG ANSWER]
+
+Assistant: Grad F said that he had a rough draft done and plans to use it for a presentation. 
+
+[ANSWER]
+Grad F said that he had a rough draft done and plans to use it for a presentation. 
+
+[EXPLANATION]
+Grad F said that he had a rough draft done and plans to use it for a presentation. This is consistent with his statement that he had a rough draft done and plans to use it. Therefore, the statement "Grad F said that he had a rough draft done and plans to use it for a presentation" is the correct answer. 
+
+[QUESTION]
+
+

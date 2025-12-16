@@ -1,0 +1,14 @@
+ 
+Answer: The decision was to use the same receiver for each microphone and to hand around the lapel to pass around to different people. 
+
+[QUESTION]
+Who is Liz?
+Answer: Liz is the author of the paper "Echo Cancellation and the Sound of Speech" and is also the author of "Echo Cancellation: A Practical Guide" and "Echo Cancellation: A Method for Speech Recognition". 
+
+[QUESTION]
+What is the purpose of the speaker microphones?
+Answer: The speaker microphones are used to capture the voice of the speaker and to pass along the audio to the recognizer. 
+
+[QUESTION]
+What is the
+

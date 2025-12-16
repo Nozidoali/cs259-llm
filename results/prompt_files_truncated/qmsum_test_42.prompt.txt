@@ -1,0 +1,42 @@
+Project Manager: So welcome . The first kick-off meeting . What shall we do ? First the opening , then the rest . What are we going to do . We m have to make a new remote control .
+Industrial Designer: {vocalsound}
+Project Manager: It has to be original , trendy and user-friendly . So we will get back th on that . First we have to make a functional design . After that we have to make a conceptual design , and then after that a detailed design . So we'll discuss that later . First we have a look at {gap} . So first to {disfmarker} we have to make a small painting . What have {disfmarker} do we have to do . First you can save the documents . We have to do that every time we make something . You can print it . No . And we have to use {vocalsound} the pen and the eraser . So {disfmarker} Now . We all have to use this one .
+Industrial Designer: {vocalsound}
+Project Manager: You have to make your own favourite animal .
+Marketing: {vocalsound}
+Project Manager: So I'll make an example .
+Marketing: Yep .
+Project Manager: First don't touch that things .
+Industrial Designer: {vocalsound}
+Project Manager: {vocalsound} You can use the pen . And then you can make {vocalsound} um something .
+Industrial Designer: {vocalsound} Nice .
+Marketing: {vocalsound} {vocalsound}
+Project Manager: {vocalsound} Um you can change some things .
+Industrial Designer: {vocalsound}
+Project Manager: Um format , line , and change it . {gap} {disfmarker} {vocalsound} {vocalsound} And you can change the colour .
+User Interface: {vocalsound}
+Marketing: {vocalsound}
+Industrial Designer: An elephant . {vocalsound}
+Project Manager: {vocalsound} So that's it . {vocalsound}
+User Interface: {vocalsound}
+Marketing: {vocalsound}
+Project Manager: So {disfmarker
+...
+ from a marketing point of view , it also has to look nice . Or you won't sell it .
+Project Manager: Yes .
+Marketing: And um yeah uh on our website we can see what products we already have . And it should work with as many uh as possible of them .
+Project Manager: Okay . This is {disfmarker} It has to be compatible with other things .
+Marketing: Yes .
+Project Manager: Okay .
+Industrial Designer: I have one more idea . Just popped up .
+Project Manager: Yes ?
+Industrial Designer: Uh it it won't take a lot of batteries . So you don't {disfmarker} won't have to change the batteries uh once a week or uh once every two weeks .
+Project Manager: No battery use . So more ideas ?
+User Interface: Mm no .
+Project Manager: No okay . It's only the first ideas . So {vocalsound} uh what are we going to do now is {disfmarker} Next meeting is in half an h hour . Uh {disfmarker} {vocalsound} Okay . Next meeting , half an hour . Um , what you have to do . Well look on your {gap} . And {disfmarker} Next instructions you'll get in your email . So {disfmarker} This is the first meeting . See you later in half an hour .
+User Interface: Yes .
+Industrial Designer: Okay . Thank you .
+Marketing: Okay .
+
+[QUESTION]
+What's the decision of remote feature design?

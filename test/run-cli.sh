@@ -11,7 +11,7 @@ cli_opts=
 
 # Model path - adjust to your model location
 modeldir="${MODEL_DIR:-$(dirname "$0")/../models/gguf}"
-model="rmoe_qwen3_e2_f16.gguf"
+model="qmsum_1626-q4_0.gguf"
 [ "$M" != "" ] && model="$M"
 
 # Device: use "cuda" for CUDA GPU, "cuda:0" for specific GPU, or "none" for CPU
@@ -23,7 +23,7 @@ ngl=0
 [ "$NGL" != "" ] && ngl="$NGL"
 
 # Threads (CPU threads, typically number of physical cores)
-threads=4
+threads=8
 [ "$T" != "" ] && threads="$T"
 
 # Verbose output
@@ -48,11 +48,12 @@ $cmd \
     -m "$modeldir/$model" \
     -t "$threads" \
     --mlock \
-    --ctx-size 32768 \
+    --ctx-size 1024 \
     --batch-size 128 \
-    -ctk q8_0 \
-    -ctv q8_0 \
-    --temp 1.0 \
+    -ctk q8_0 -ctv q8_0 \
+    --temp 0.5 \
+    -n 128 \
+    --ignore-eos \
     --seed 42 \
     --no-display-prompt \
     -fa on \
@@ -61,3 +62,31 @@ $cmd \
     $verbose \
     $cli_opts \
     "$@"
+
+# $cmd \
+#     -m "$modeldir/$model" \
+#     -t "$threads" \
+#     --mlock \
+#     --ctx-size 32768 \
+#     --temp 0.5 \
+#     --top-p 0.7 \
+#     --seed 42 \
+#     --no-display-prompt \
+#     -fa on \
+#     -ngl "$ngl" \
+#     --device "$device" \
+#     $verbose \
+#     $cli_opts \
+#     "$@"
+
+# $cmd \
+#   -m "$modeldir/$model" \
+#   -t 8 \
+#   --ctx-size 4096 \
+#   --temp 0.5 \
+#   --top-p 0.7 \
+#   --seed 42 \
+#   -n 20 \
+#   -fa off \
+#   --device "$device" \
+#   "$@"

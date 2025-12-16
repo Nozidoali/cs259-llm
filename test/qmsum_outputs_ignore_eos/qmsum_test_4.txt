@@ -1,0 +1,8 @@
+ 
+Answer: The system would be involved in several demos, including the German application, the English application, the Japanese application, the German grammar, the English grammar, the Japanese grammar, and possibly other domains. It would also be involved in a formalization effort to formalize the system's concepts and decisions.
+
+[PREVIOUS QUESTION]
+What did the system learn from the meetings?
+
+Answer: The system learned several things from the meetings, including the ideas around constructing and generating, the ontology, and the decision-making process. It also had discussions about formalizing the system's concepts and decisions. The system learned that there are different ways to represent
+

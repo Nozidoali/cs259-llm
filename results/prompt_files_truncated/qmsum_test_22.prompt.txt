@@ -1,0 +1,55 @@
+Industrial Designer: {vocalsound} I'm proud of it . {vocalsound}
+User Interface: {vocalsound}
+Project Manager: Okay . This is our final meeting , the detailed design meeting . And again I'll take minutes . The {disfmarker} what we have to get through in this meeting is firstly the prototype presentation from you two , so you can show us what you've been working on so diligently .
+User Interface: Yeah .
+Marketing: It does look very cool .
+Project Manager: Um then
+Industrial Designer: {vocalsound}
+Project Manager: {vocalsound} then Cat's going to present the evaluation criteria that we're going to be evaluating this against .
+User Interface: {vocalsound}
+Project Manager: Then I need to say some st a few things about finance , 'cause we have to check that it's within the finance criteria . Um and then we'll be making sure that our product fits both the evaluation criteria from Cat and the financial limits . Um and then we uh will have a brief evaluation of the whole process of production and design that we've been through . So we've got forty minutes . S
+Marketing: And then do we get to make a remote control ?
+Industrial Designer: {vocalsound}
+Project Manager: {vocalsound} 'Cause we missed out .
+User Interface: {vocalsound}
+Marketing: {vocalsound} Yeah .
+Project Manager: So
+Industrial Designer: {vocalsound}
+Project Manager: it's now {disfmarker} I guess that we're supposed to start at fifteen thirty five , so we've got until four fifteen .
+Industrial Designer: Uh-huh . How how much do we have , forty minutes ?
+Project Manager: Is that right ?
+User Interface: Yeah , about four fifteen , yeah .
+Project Manager: Yeah ,
+Industrial Designer: Yeah .
+Marketing: Yeah .
+Project Manager: until about four fifteen . So yeah . {vocalsound}
+Industrial Designer: {vocalsound} Okay , so .
+Project Manager: Go for it . Do you want {disfmarker}
+User Interface: So , you said um {disfmarker} are are we starting with the the {dis
+...
+ .
+Marketing: I don't like Play-Doh , no .
+Industrial Designer: {vocalsound}
+User Interface: Oh , you don't like anim
+Marketing: It's just minging . It smells so bad .
+User Interface: {vocalsound} It doesn't ?
+Marketing: It does .
+User Interface: Smells quite nice . Smells very sweet .
+Marketing: Mm .
+Project Manager: Right , so we have to complete the final questionnaire and meeting summary when they send it .
+Industrial Designer: Was there a questionnaire already sent ?
+Project Manager: I don't know if it's already sent or not .
+Marketing: No , it hasn't been .
+Project Manager: Um presumably I have to {disfmarker}
+Marketing: Do we have to go back into the other room or can we stay in here now ?
+Project Manager: I don't see why you can't stay here , really .
+Marketing: Okay , so the other way . {vocalsound}
+Project Manager: {vocalsound} Did I save this one ? Production costs .
+User Interface: {vocalsound} I made your animal for you .
+Industrial Designer: {vocalsound}
+Marketing: {vocalsound}
+Project Manager: {vocalsound} It was supposed to be pink . {vocalsound} But it was blue on the board .
+User Interface: Yeah , that's the one {disfmarker}
+
+[QUESTION]
+Summarize the discussion about project finance.

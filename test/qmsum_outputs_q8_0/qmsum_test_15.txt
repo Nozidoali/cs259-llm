@@ -1,0 +1,14 @@
+ 
+
+Answer: The professor thought that echoes and reverberation were not a problem with the Aurora baseline system that they were trying to improve, as they did not have any artifacts in their system.
+
+[QUESTION]
+What was the purpose of the Aurora baseline system?
+
+Answer: The purpose of the Aurora baseline system was to compare the performance of different speech recognition systems, including the Aurora system and HTK, in terms of error rates and speech quality. It was also used to evaluate the performance of the Aurora system in terms of spectral subtraction and spectral subtraction parameters.
+
+[QUESTION]
+What did the professor do with the Aurora baseline system?
+
+Answer: The
+

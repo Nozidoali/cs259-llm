@@ -1,0 +1,43 @@
+Professor E: So . OK . Doesn't look like it crashed . That 's great .
+Grad G: So I think maybe what 's causing it to crash is I keep starting it and then stopping it to see if it 's working . And so I think starting it and then stopping it and starting it again causes it to crash . So , I won't do that anymore .
+Postdoc B: And it looks like you 've found a way of uh mapping the location to the {disfmarker} without having people have to give their names each time ?
+PhD A: Sounds like an initialization thing .
+Postdoc B: I mean it 's like you have the {disfmarker} So you know that {disfmarker}
+Grad G: No .
+Postdoc B: I mean , are you going to write down {pause} that I sat here ?
+Grad G: I 'm gonna collect the digit forms and write it down .
+Postdoc B: OK .
+PhD C: Oh , OK .
+Grad G: So {disfmarker} So they should be right with what 's on the digit forms . OK , so I 'll go ahead and start with digits . u And I should say that uh , you just pau you just read each line an and then pause briefly .
+Professor E: And start by giving the transcript number .
+PhD A: Tran
+PhD D: Transcript {disfmarker} Uh . OK , OK .
+PhD A: Oh sorry , go ahead .
+Professor E: So uh , you see , Don , the unbridled excitement of the work that we have on this project .
+Grad H: OK .
+Professor E: It 's just uh {disfmarker}
+Grad H: Umh .
+Professor E: Uh , you know , it doesn't seem like a bad idea to have {comment} that information .
+Grad G: And I 'm surprised I sort of {disfmarker} I 'm surprised I forgot that ,
+Professor E: Yeah , I {disfmarker} I 'd {disfmarker} I think it 's some
+Grad G: but uh I think that would be a good thing to add . After I just printed out a zillion of them .
+
+
+...
+s say , of a distant mike .
+PhD C: Mm - hmm .
+Professor E: And u I think routinely they would not do this . So , since I 'm interested in the distant mike stuff , I wanna make sure that there is at least that somewhere
+PhD C: Right . Great . OK .  
+Professor E: and uh {disfmarker} But if we ask them to do that they might be intrigued enough by the idea that they uh might be e e willing to {disfmarker} the {disfmarker} I might be able to talk them into it .
+PhD C: Mm - hmm .
+Grad G: Um . We 're getting towards the end of our disk space , so we should think about trying to wrap up here .
+PhD C: That 's a good way to end a meeting .
+Professor E: OK . Well I don't {disfmarker} why don't we {disfmarker} why d u why don't we uh uh turn them {disfmarker} turn
+Grad G: OK , leave {disfmarker} leave them on for a moment until I turn this off , cuz that 's when it crashed last time .
+Postdoc B: Oh . That 's good to know .
+Professor E: Turning off the microphone made it crash . Well {disfmarker}
+Postdoc B: That 's good to know .
+Professor E: OK .
+
+[QUESTION]
+What were the main discussion points of the meeting?

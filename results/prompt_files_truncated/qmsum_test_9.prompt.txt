@@ -1,0 +1,60 @@
+Professor A:  Am I on ? I guess so . Radio two . Hmm . Radio two .
+Grad E: Hello ?
+Professor A: Wow .
+Grad E: Mm - hmm . Hi ?
+PhD B: Blow into it , it works really well .
+Grad F: Channel B .
+Professor A: People say the strangest things when their microphones are on .
+PhD D: Channel four . Test .
+PhD C: Uh - oh .
+PhD D: OK .
+PhD C: Radio four .
+Grad E: Hello ?
+Professor A: So everybody everybody 's on ?
+PhD D: Today 's
+Professor A: Yeah . So y you guys had a {disfmarker} a meeting with uh {disfmarker} with Hynek which I unfortunately had to miss . Um and uh somebody
+PhD C: Mmm .
+Professor A: eh e and uh I guess Chuck you weren't there either , so the uh
+PhD B: I was there .
+Professor A: Oh you were there ?
+PhD B: With Hynek ?
+Professor A: Yeah .
+PhD B: Yeah .
+Professor A: So everybody knows what happened except me . OK . {vocalsound} Maybe somebody should tell me .
+PhD C: Oh yeah . Alright . Well . Uh first we discussed about some of the points that I was addressing in the mail I sent last week .
+Professor A: Uh - huh .
+PhD C: So . Yeah . About the um , well {disfmarker} the downsampling problem .
+Professor A: Yeah .
+PhD C: Uh and about the f the length of the filters and {disfmarker} Yeah .
+Professor A: What was the {disfmarker} w what was the downsampling problem again ?
+PhD C: So we had {disfmarker}
+Professor A: I forget .
+PhD C: So the fact that there {disfmarker} there is no uh low - pass filtering before the downsampling . Well .
+Professor A: Uh - huh .
+PhD C: There is because there is LDA filtering but that 's perhaps not uh the best w m
+Professor A: Depends what it 's frequency characteristic is , yeah .
+PhD C:
+
+...
+ trying to do that .
+Professor A: Huh .
+Grad E: Yeah .
+PhD C: What is Octave so ? It 's a free software ?
+Grad E: What 's that ? Uh , Octave ?
+PhD C: Yeah .
+Grad E: Yeah it 's {disfmarker} it 's {disfmarker} it 's free . I think we have it here {comment} r running somewhere .
+PhD B: Great !
+Grad E: Yeah .
+PhD C: And it does the same syntax and everything eh like Matlab , or {disfmarker} ?
+Grad E: Um {vocalsound} {comment} i it 's a little behind , it 's the same syntax but it 's a little behind in that {comment} Matlab went to these like um you can have cells and you can {disfmarker} you can {comment} uh implement object - oriented type things with Matlab . Uh Octave doesn't do that yet , so I think you , Octave is kinda like Matlab um four point something or .
+PhD B: If it 'll do like a lot of the basic matrix and vector stuff
+Grad E: The basic stuff , right .
+PhD B: that 's perfect .
+Grad E: Yeah .
+PhD B: Great !
+Professor A: OK , guess we 're done .
+Grad E: OK .
+Grad F: Well , although by the way .
+
+[QUESTION]
+What did the professor think about clustering?

@@ -1,0 +1,46 @@
+Grad B: what things to talk about .
+Grad F: I 'm {disfmarker} What ? Really ? Oh , that 's horrible ! Disincentive !
+Grad A: OK , we 're recording .
+Grad F: Hello ?
+Grad B: Check check {pause} check check .
+Grad D: Uh , yeah .
+Grad F: Hello ? Which am I ?
+Professor C: Oh right .
+Grad B: Alright . Good .
+Grad F: Channel fi OK . OK . Are you doing something ? OK , then I guess I 'm doing something . So , um , So basically the result of m much thinking since the last time we met , um , but not as much writing , um , is a sheet that I have a lot of , like , thoughts and justification of comments on but I 'll just pass out as is right now . So , um , here . If you could pass this around ? And there 's two things . And so one on one side is {disfmarker} on one side is a sort of the revised sort of updated semantic specification .
+Grad D: Um {disfmarker} The {disfmarker} wait .
+Grad F: And the other side is , um , sort of a revised construction formalism .
+Grad E: This is just one sheet , right ?
+Grad D: Ah ! Just one sheet .
+Grad F: It 's just one sheet .
+Grad D: OK .
+Grad F: It 's just a {disfmarker} Nothing else .
+Grad D: Front , back .
+Grad F: Um , Enough to go around ? OK . And in some ways it 's {disfmarker} it 's {disfmarker} it 's very similar to {disfmarker} There are very few changes in some ways from what we 've , um , uh , b done before but I don't think everyone here has seen all of this . So , uh , I 'm not sure where to begin . Um , as usual the disclaimers are there are {disfmarker} all these things are {disfmarker} it 's only slightly more stable than it was before .
+Grad E: Mm - hmm .
+Grad F: And , um , after a
+...
+ that .
+Professor C: OK .
+Grad B: You can just give him the abstract that we wrote for the paper .
+Professor C: That - that 'll tell him exactly what 's going on . Yeah , that {disfmarker} Alright .
+Grad F: Can we do {disfmarker} can we do one - thirty ?
+Grad A: No .
+Grad F: Oh , you already told me no .
+Grad A: But we can do four .
+Grad F: One , OK , it 's fine . I can do one . It 's fine . It 's fine .
+Grad A: One or four . I don't care .
+Grad E: To me this is equal . I don't care .
+Grad A: If it 's equal for all ? What should we do ?
+Grad F: Yeah , it 's fine .
+Grad A: Four ?
+Grad F: Fine . Yeah {disfmarker} no , no , no , uh , I don't care . It 's fine .
+Grad A: It 's equal to all of us , so you can decide one or four .
+Grad B: The pressure 's on you Nancy .
+Grad A: Liz actually said she likes four because it forces the Meeting Recorder people to cut , you know {disfmarker} the discussions short .
+Grad F: OK . OK , four .
+Grad E: Well , if you insist , then .
+Grad F: OK ? OK . I am .
+
+[QUESTION]
+What was concluded on semantic specification?

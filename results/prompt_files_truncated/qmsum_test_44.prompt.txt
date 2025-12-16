@@ -1,0 +1,47 @@
+User Interface: Oops .
+Project Manager: So , hello everyone . {vocalsound} We're here to have a kick-off meeting for the design of a {disfmarker} f for the beginning of new project um {vocalsound} uh remote control for the design for a new remote control {vocalsound} . I'm the Project Manager Christa Pavlov and {vocalsound} okay let's begin . {vocalsound}
+Marketing: {vocalsound}
+Project Manager: {vocalsound} So I'm first going to do an opening then we get used to one anothers and we speak about this tool we're going to design and try to make a project plan , some discussion and then we talk of uh the next meeting . So um we want to to do a new remote control . It has to be original , trendy and user friendly .
+Marketing: {vocalsound}
+Project Manager: Um I think the important points we have to t talk about are uh it's functional design , it's conceptual design , and desail detailed design . {gap} and for that we're going um all to work individually and then have meeting during the whole day . Um , so {vocalsound} let's try the whiteboard {vocalsound} .
+Marketing: {vocalsound} {vocalsound} Wow . {vocalsound}
+Project Manager: {vocalsound} Um so any of you who want to go .
+User Interface: Yeah , for favourite animals .
+Project Manager: {vocalsound}
+User Interface: It's gonna be not my favourite one but the one I can draw .
+Project Manager: {vocalsound}
+Industrial Designer: {vocalsound}
+User Interface: {vocalsound} And it's gonna be {disfmarker} you'll try to guess .
+Marketing: Wow . {vocalsound} {vocalsound} Complex .
+Project Manager: Wow . {vocalsound}
+Industrial Designer: {vocalsound}
+Marketing: Huh ? A cat .
+Project Manager: {vocalsound}
+Industrial Designer: No . {vocalsound}
+Project Manager:
+
+...
+ound} the ones , {vocalsound} make um {disfmarker} to decide what what are the ones important and what are the one that we don't want . {vocalsound} And um m maybe more in the technical parts what uh do we want to do . Um . {vocalsound} So um your personal coach will send you some instruction for for this thirty minutes .
+Marketing: So what does M_E_ means ? M_E_ the user requirements ? Or that's uh that's for us ?
+User Interface: Market Expert .
+Project Manager: Mm . {vocalsound}
+Industrial Designer: Marketing {disfmarker} yeah {vocalsound} {gap} .
+Marketing: Uh that's me .
+User Interface: {vocalsound}
+Marketing: {vocalsound} Oh , of course {vocalsound} yeah , the user requirement specifications , uh-huh , yeah .
+Project Manager: Mm-hmm .
+Marketing: Okay . {vocalsound} I'll think of that .
+Project Manager: Mm okay . So .
+Marketing: So ?
+Project Manager: I think that's all .
+Marketing: Meeting's over ?
+Project Manager: Yeah .
+User Interface: Okay .
+Marketing: Great .
+Industrial Designer: Thank you .
+Marketing: Thank you .
+Project Manager: See you in thirty minutes .
+User Interface: Thank you everybody .
+
+[QUESTION]
+Summarize the decision of the discussion about the design goal of the remote control.

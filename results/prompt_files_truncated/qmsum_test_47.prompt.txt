@@ -1,0 +1,40 @@
+Project Manager: All hooked up . {vocalsound} Okay , so now we are here at the functional design meeting . Um {vocalsound} hopefully this meeting I'll be doing a little bit less talking than I did last time 'cause this is when you get to show us what you've been doing individually . The agenda for the meeting , I put it in the sh shared documents folder . I don't know if that meant that you could see it or not .
+User Interface: {vocalsound}
+Project Manager: Did anyone ?
+Industrial Designer: Mm .
+User Interface: No .
+Project Manager: No . Oh well . Um I'll try and do that for the next meeting as well so if you check in there , there's a shared project documents folder . Um and it should be in there .
+User Interface: Mm . Um um wi on on a what ? Oh project project documents , yeah , yeah , yeah , okay .
+Project Manager: Project documents , yeah . So I'll put it in there .
+User Interface: Oh okay , yeah .
+Project Manager: Is it best if I send you an email maybe , to let you know it's there ?
+User Interface: Yes , I think so .
+Project Manager: Yep . I'll do that next time . Um {vocalsound} I'll act as secretary for this meeting and just take minutes as we go through , and then I'll send them to you after the meeting . The main the main focus of this meeting is your presentations that you've been preparing during the time , so we'll go through each of you one by one . Um then we need to briefly discuss the new project requirements that were sent to us . I just sent
+User Interface: Yeah , the last minute , yeah ,
+Project Manager: at the last minute , I'm sorry about that ,
+User Interface: yeah .
+Project Manager: but we can see how that affects what you were you were doing .
+User Interface: Yeah .
+Project Manager: Um and then we need to , by the end of the meeting come to some kind of decision on who our target group's going to be and what the functions of the remote control {disfmarker} that's the the main goal is to come up with those two
+...
+vocalsound} Uh something conceptual , yeah .
+Project Manager: on something conceptual and you're watching trends to see how we go and surely voice recognition'll fall off the map or something that {disfmarker}
+Marketing: {vocalsound}
+Project Manager: um we'll keep keep our options op hmm ?
+Industrial Designer: Wha what was it again that I was supposed to look into ? Con components , oh .
+Project Manager: Components ,
+User Interface: Hmm . {vocalsound}
+Project Manager: yeah .
+User Interface: Sorry , but um the next meeting um are we going to have it um right after lunch or {vocalsound} shall we prepare our {disfmarker}
+Project Manager: No , we have we have {disfmarker} after lunch we have thirty minutes to ourselves to prepare ,
+User Interface: To prepare , okay , yeah , that's good .
+Project Manager: so that's fine , w before lunch we just have to complete the questionnaire and some sort of summary .
+User Interface: Okay .
+Project Manager: Okay ? Right on time .
+User Interface: {vocalsound} Cool . {vocalsound}
+Project Manager: Okay , {vocalsound} so you can {disfmarker} I guess we'll see you for lunch in a sec ? {vocalsound}
+Marketing: {vocalsound}
+User Interface: Okay , see you .
+
+[QUESTION]
+What did the group think of disposable income when discussing general requirements?

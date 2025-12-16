@@ -1,0 +1,14 @@
+ 
+
+Answer: The main discussion points of the meeting were about the unbridled excitement of the work that we have on this project, the human behavior in the project, and the research points and challenges that we are facing.
+
+Question: What is the purpose of the Human Subjects Project?
+
+Answer: The purpose of the Human Subjects Project is to study difference parameters to detect overlapping zones in speech recorded by participants in a study.
+
+Question: What did the Human Subjects Project researchers discover?
+
+Answer: The Human Subjects Project researchers discovered that the participants had difficulty recognizing pauses in their speech and that they had difficulty distinguishing between different voices and accents.
+
+Question: What
+

@@ -1,0 +1,12 @@
+ 
+
+Based on the document, the user interface designer proposed the following in the discussion:
+
+1. The user interface designer proposed the use of an L_C_D_ display instead of L_C_D_ buttons for the remote control device.
+
+2. The user interface designer proposed a push button design instead of a L_C_D_ button design for the remote control device.
+
+3. The user interface designer proposed a speaker independent technology or something for the remote control device instead of using L_C_D_ buttons for the device.
+
+So in summary, the user interface designer proposed the use of push buttons instead of L_C_D_ buttons for the remote control device
+

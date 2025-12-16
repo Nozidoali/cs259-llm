@@ -122,6 +122,7 @@ MOE_CONFIG = {
     "model2_path": None,
     "gating_model_path": None,
     "routing_mode": "weighted_sum",
+    "shared_expert_intermediate_size": None,  # Set to 0 to disable shared expert in metadata
 }
 
 for dir_path in [MODELS_DIR, GGUF_OUTPUT_DIR, DATA_DIR, TRUTHFULQA_CACHE_DIR, LOGS_DIR, GATING_MODEL_DIR]:

@@ -1,0 +1,79 @@
+{
+  "method": "rmoe",
+  "base_model": "Qwen/Qwen2-0.5B-Instruct",
+  "datasets": ["truthfulqa", "truthfulqa"],
+  "seed": 42,
+  "comment": "Full RMoE pipeline configuration for Qwen2-0.5B-Instruct",
+
+  "gating": {
+    "comment": "Gating network WITHOUT bias (required for Qwen2MoE compatibility)",
+    "dropout": 0.1,
+    "learning_rate": 1e-4,
+    "batch_size": 32,
+    "num_epochs": 10,
+    "weight_decay": 0.01,
+    "train_split": 0.7,
+    "val_split": 0.15,
+    "test_split": 0.15,
+    "early_stopping_patience": 3,
+    "min_delta": 0.001
+  },
+  
+  "merge": {
+    "target_architecture": "qwen2moe",
+    "comment": "Merge experts into Qwen2MoE model using gating network",
+    "routing_mode": "select_one",
+    "comment_routing_mode": "Options: 'weighted_sum' (soft routing) or 'select_one' (hard routing)",
+    "use_zero_shared_expert": true,
+    "comment_use_zero_shared_expert": "Set to true to use zero-initialized shared expert (required for Qwen2MoE)",
+    "shared_expert_path": null,
+    "comment_shared_expert_path": "null = use base_model as shared expert, or specify path to different model"
+  },
+  
+  "full_finetune": {
+    "comment": "Optional: Fine-tune the merged MoE model end-to-end",
+    "enabled": false,
+    "num_epochs": 2,
+    "batch_size": 1,
+    "gradient_accumulation_steps": 8,
+    "learning_rate": 2e-5,
+    "weight_decay": 0.01,
+    "max_length": 512,
+    "eval_split": 0.2,
+    "warmup_steps": 50,
+    "fp16": true
+  },
+  
+  "conversion": {
+    "comment": "Convert merged model to GGUF format for llama.cpp",
+    "output_type": "f16",
+    "comment_output_type": "Options: f16, f32, q4_0, q4_1, q5_0, q5_1, q8_0",
+    "verify_conversion": true
+  },
+
+  "comment_quantize": "Quantization type for final GGUF model. Options: Q4_0, Q4_K_M, Q5_K_M, Q8_0, etc.",
+  
+  "gguf_output": null,
+  "comment_gguf_output": "Custom output path for GGUF file (null = auto-generate)",
+  
+  "paths": {
+    "comment": "Optional: Override default paths",
+    "work_dir": "./workspace",
+    "experts_dir": null,
+    "gating_dir": null,
+    "merged_dir": null,
+    "gguf_dir": null
+  },
+  
+  "advanced": {
+    "comment": "Advanced options for debugging and optimization",
+    "device": "auto",
+    "comment_device": "Options: 'auto', 'cuda', 'cpu', 'mps'",
+    "gradient_checkpointing": false,
+    "mixed_precision": "fp16",
+    "dataloader_num_workers": 4,
+    "pin_memory": true,
+    "compile_model": false
+  }
+}
+

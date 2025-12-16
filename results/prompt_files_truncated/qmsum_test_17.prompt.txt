@@ -1,0 +1,53 @@
+Grad A: OK , we 're on .
+Professor B: Yeah .
+Grad A: So , I think this is gonna be a pretty short meeting because I have four agenda items , three of them were requested by Jane who is not gonna be at the meeting today .  So . {vocalsound} The uh first was transcription status . Does anyone besides Jane know what the transcription status is ?
+PhD F: Um , sort of , I do , peripherally .
+PhD C: Is that English ?
+PhD F: Um {disfmarker} Well first of all with IBM I got a note from Brian yesterday saying that they finally made the tape for the thing that we sent them a {pause} week or week and a half ago
+PhD D: That 's our system .
+Grad A: Ugh !
+PhD F: and that it 's gone out to the transcribers and hopefully next week we 'll have the transcription back from that .
+Grad A: C can I have a pen ?
+PhD F: Um {disfmarker} Jane seems to be um moving right along on the transcriptions from the ICSI side . She 's assigned , I think probably five or six m more meetings .
+PhD C: Yeah , I think we 're up to MR thirteen or something .
+PhD D: Mmm .
+PhD F: Yeah , so um , I guess she 's hired some new transcribers
+PhD D: Speaking {disfmarker}
+Grad E: Which meetings is she transcribing ?
+PhD F: and {disfmarker} Um well we 've {disfmarker} we 've run out of E D Us because a certain number of them are um , sort of awaiting to go to IBM .
+Grad E: OK .
+PhD C: For IBM , yeah .
+PhD D: Hmm .
+Grad E: OK .
+PhD F: and the rest are in process being transcribed uh here .
+PhD D: So does she have transcribers right now who are basically sitting idle because there 's no data back from IBM
+Grad E: So we 're doing some in parallel .
+Grad A: Yep .
+PhD F: No .
+Grad A:
+
+...
+Professor B: Yeah .
+PhD D: OK .
+PhD F: OK .
+Professor B: Yeah , thirty hours is like a hundred and ten thousand uh seconds . Uh , so that 's like eleven {disfmarker} eleven million frames . And a two thousand hidden unit net is uh I guess about seven , eight hundred thousand parameters . So that 's probably {disfmarker} That 's probably fine . I mean a four thousand is well within the range that you could benefit from but the two thousand 'd be faster so {disfmarker}
+PhD D: Right . I actually have to go .
+Professor B: Alright .
+PhD D: So .
+Professor B: Uncle Bernie 's rule is ten to one . Bernie Woodrow 's Rule of {disfmarker} yeah {disfmarker} Uncle Bernie {disfmarker} yeah .
+Grad A: We 're just waiting for you to leave .
+Professor B: Yes sir .
+Grad A: Anything else ?
+Professor B: Nah .
+Grad A: OK .
+Professor B: Since we have nothing to talk about we only talked for an hour .
+Grad A: If {disfmarker}
+Professor B: So .
+Grad A: yeah that 's right .
+PhD C: Yeah .
+Grad A: Uh , well , we started late .
+PhD F: Transcript
+Professor B: de - ba - de . de - ba - de That 's all folks !
+
+[QUESTION]
+What did the group think about Dave leaving?

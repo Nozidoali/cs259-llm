@@ -76,9 +76,14 @@ def train_gating_network(
     test_split=0.15,
     seed=42,
     prompt_dir=None,
+    per_token=False,
 ):
     logger.info(f"Training gating network for {len(datasets)} datasets")
     logger.info(f"Output directory: {output_dir}")
+    if per_token:
+        logger.info("Training mode: PER-TOKEN (each token is a training sample)")
+    else:
+        logger.info("Training mode: PER-SEQUENCE (averaged embeddings)")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
@@ -92,6 +97,7 @@ def train_gating_network(
         test_split=test_split,
         seed=seed,
         prompt_dir=prompt_dir,
+        per_token=per_token,
     )
     embedding_dim = len(dataset["train"][0]["embedding"])
     num_classes = len(datasets)

@@ -1,0 +1,6 @@
+ 
+
+The discussion about the working design of the remote control is about the design of a portable device that will transmit messages to a main device like a T_V_. The main device will have different functions such as sending messages to a T_V_, volume control, and power on and off. The user interface will be simple and easy to use. The chip will be digital and take care of the functions. The chip will transmit information to the main device and generate information to the user. The chip will have different encryption codes for different user channels. The chip will have different encryption codes for different user channels.
+
+The main chip will have a switch on
+

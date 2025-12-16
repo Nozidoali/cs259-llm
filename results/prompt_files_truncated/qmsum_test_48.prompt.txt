@@ -1,0 +1,49 @@
+Marketing: {gap}
+Project Manager: {gap} {vocalsound}
+Marketing: I dunno . {vocalsound} Throwing away my toothpick .
+User Interface: Hi there .
+Project Manager: Yo . Ow .
+Industrial Designer: {vocalsound}
+Project Manager: {gap} {vocalsound}
+Marketing: 'Kay .
+Project Manager: Uh {disfmarker}
+Marketing: Nice user interface .
+Project Manager: Yeah . What the {disfmarker} Uh {disfmarker}
+Marketing: {gap}
+Project Manager: Yeah well , ja well let's just start .
+Marketing: 'Kay .
+Project Manager: {vocalsound} {vocalsound} I've uh made a presentation uh but uh I'll open it on the Smartboard , so we can all see it .
+Marketing: Right let's see it .
+Project Manager: So it's in the project documents because that's what we can find here . Well {gap} . {vocalsound}
+Industrial Designer: {vocalsound}
+Project Manager: Very nice . Well this is called the the the kick-off meeting . So uh {vocalsound} I'm the Project Manager , so I had to fill it in ,
+Marketing: 'Kay .
+Project Manager: and uh hmm . {vocalsound} {vocalsound} Oh sorry . {vocalsound} And {gap} an uh a nice agenda . {vocalsound} Uh we'll do the opening and then uh we'll meet each other , what uh we already do , so , that's not uh very much trouble . I'll I'll show you the the tools we have here , so that we can all use them . Then uh we'll look at the project plan from uh Real Reaction .
+Marketing: {vocalsound}
+Project Manager: We'll discuss about our first ideas about the project , and then uh we'll close the meeting , and then we can uh individually uh do our things and then uh we'll get back here . So {vocalsound} this the opening we'll uh {disfmarker} We have to uh design a new television remote control . You have heard that uh already I think ,
+
+...
+ warned uh through your laptop uh to get over here .
+User Interface: Thirty minutes .
+Marketing: Thirty minutes .
+User Interface: Yeah alright it's it's handy to know {gap} {vocalsound} {disfmarker}
+Project Manager: I'll have to restore my uh my desktop uh
+Industrial Designer: {vocalsound} Very handy to know .
+Marketing: {vocalsound} It's totally broken . {vocalsound}
+Project Manager: because uh {vocalsound} it's it's the half of the normal size . {vocalsound}
+User Interface: {vocalsound} {vocalsound} {vocalsound}
+Industrial Designer: Right see you in half an hour then .
+Project Manager: Oh right , oh .
+User Interface: Oh . {vocalsound} Goodbye . {vocalsound}
+Project Manager: {vocalsound} Ma {vocalsound}
+Industrial Designer: W
+Marketing: Oh {disfmarker}
+User Interface: S
+Project Manager: W {vocalsound} that was a nice meeting .
+Marketing: {vocalsound} {gap} .
+User Interface: {gap} .
+Industrial Designer: Right uh see you in thirty minutes then . {vocalsound}
+Project Manager: Yeah , see you . {vocalsound}
+
+[QUESTION]
+What is the conclusion of the discussion about Marketing strategy when discussing group's plan of their marketing strategy?

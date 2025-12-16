@@ -1,0 +1,7 @@
+ 
+
+Answer: The professor thought that it was not a good idea to cluster the data because they would have to ignore certain bands and a trivial mapping would be needed, so he suggested using the "AND" and "OR" operators instead of a binary variable.
+
+So the answer is that he did not think it was a good idea to cluster the data. [end of text]
+
+

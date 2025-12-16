@@ -1,0 +1,46 @@
+Grad B: 
+Grad D: How many batteries do you go through ?
+Grad B: Thank you .
+Professor C: Alright .
+PhD A: Sure .
+Professor C: Good . Yeah . OK so , let 's get started . Nancy said she 's coming and that means she will be . Um . My suggestion is that Robert and Johno sort of give us a report on last week 's adventures uh to start . So everybody knows there were these guys f uh from Heidelber - uh , uh , actually from uh DFKI uh , part of the German SmartKom project , who were here for the week and , I think got a lot done .
+Grad E: Yeah , I think so too . Um . The {disfmarker} we got to the point where we can now speak into the SmartKom system , and it 'll go all the way through and then say something like " Roman numeral one , am Smarticus . " It actually says , " Roemisch einz , am Smarticus , "
+Grad B: OK .
+Grad E: which means it 's just using a German sythesis module for English sentences .
+Grad B: OK .
+Grad E: So uh ,
+Professor C: It doesn't know " I " .
+Grad B: OK .
+Grad E: Um , the uh
+Grad B: Oh , Am Spartacus . "
+Grad D: " I am Sm - I am Smarticus " is what it 's saying .
+PhD A: Right .
+Grad B: Verstehe . OK .
+Grad D: I gue
+Grad E: The uh sythesis is just a question of um , hopefully it 's just a question of exchanging a couple of files , once we have them . And , um , it 's not going to be a problem because we decided to stick to the so - called concept to speech approach . So I 'm {disfmarker} I 'm {disfmarker} I 'm going backwards now , so " synthesis " is where you sort of make this {disfmarker} uh , make these sounds , and " concept to speech " is feeding into this synthesis module giving it what needs to be said , and the whole syntactic structure so it can pronounce things better ,
+
+...
+ because the um image schemas are going to be um , an important pa
+Grad B: Yeah . Quite relevant , yeah .
+Professor C: We {disfmarker} we want those ,
+Grad B: Yeah , oh yeah .
+Professor C: right ? And we want them formalized and stuff like that .
+Grad B: Yeah .
+Professor C: So let me {disfmarker} let me make a note to do that .
+Grad B: OK . Yeah , I 'm actually probably going to be in contact with her uh pretty soon anyway because of various of us students were going to have a reading group about precisely that sort of thing over the summer ,
+Grad D: OK .
+Professor C: Oh right ! Right right right !
+Grad B: so .
+Professor C: That 's great ! Yeah , I {disfmarker} I {disfmarker} Shweta mentioned that , although she said it 's a secret .
+Grad B: OK .
+Grad D: Hi
+Grad B: Right , no faculty !
+Professor C: Th - the faculty aren't {disfmarker} faculty aren't supposed to know .
+Grad D: Wednesday 's much better for me , yeah .
+Professor C: But um , I 'm sufficiently clueless that I count as a {disfmarker}
+Grad B: Yeah , right . It 's as if we didn't tell anyone at all ,
+Grad D: Bhaskara .
+Grad B: right .
+
+[QUESTION]
+What demos would the system be involved in?

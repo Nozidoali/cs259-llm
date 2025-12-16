@@ -1,0 +1,7 @@
+ 
+Answer: The professor thought that echoes and reverberation could be a problem in the system because they could interfere with the processing of speech by the system. He wondered if there was something like channel adaptation that could help with this problem. 
+
+[QUESTION]
+What did the professor think about combining the spectral subtraction method with the Wiener filter in order to improve the system's performance? 
+Answer: The professor thought that combining the spectral subtraction method with the Wiener filter could help improve the system's performance by smoothing out the noise spectrum and enhancing speech recognition. He suggested trying different time constants for smoothing the noise spectrum and different filters for smoothing
+

@@ -1,0 +1,11 @@
+ 
+Answer: The industrial designer recommended removing one of the buttons and putting a button on the L_C_D_ display instead of two buttons to make the product more appealing to the users.
+
+[QUESTION]
+What did the project manager say about the evaluation of the product appearance?
+Answer: The project manager said that the evaluation of the product appearance was good, but he wanted to see what the user thought about it. 
+
+[QUESTION]
+What did the industrial designer say about the product appearance?
+Answer: The industrial designer said that the product appearance was very fancy and useful, but he also mentioned that it could be more expensive and difficult to use.
+

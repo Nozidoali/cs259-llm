@@ -1,0 +1,11 @@
+ 
+Answer: The professor thought that it might be useful to cluster the {disfmarker} variables in the experiment in order to get more robustness under difficult conditions. 
+
+[QUESTION]
+What did the professor think about training the different pieces of data? 
+Answer: The professor thought that it might be useful to train each piece of data separately and then backpropagate from that to get a stronger representation of the test data. 
+
+[QUESTION]
+What did the professor think about the alignment? 
+Answer: The professor thought that it might be useful to align the different pieces of data with a hidden variable to get more robustness under difficult
+

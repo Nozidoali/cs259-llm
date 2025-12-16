@@ -1,0 +1,61 @@
+Project Manager: Okay . {vocalsound} Well , let's start . What are we doing ? Oops . {vocalsound}
+User Interface: Hmm .
+Industrial Designer: Ah , pinball .
+Project Manager: {vocalsound} Okay . Okay . Not doing .
+Industrial Designer: {vocalsound}
+User Interface: {vocalsound}
+Industrial Designer: {vocalsound}
+Marketing: Mm . Ah . Hey . {vocalsound} Ah .
+Project Manager: Uh {disfmarker}
+User Interface: Oh .
+Marketing: Now I have my screen back too . {vocalsound}
+Project Manager: Very good .
+Industrial Designer: {vocalsound}
+Project Manager: {vocalsound} Okay .
+Industrial Designer: {vocalsound}
+Marketing: Yeah .
+Project Manager: {vocalsound} {gap} we have presentations . So first , it's your turn .
+Industrial Designer: {gap}
+User Interface: Mine . Oh , great .
+Project Manager: {vocalsound} Yeah . Isn't it amazing . {vocalsound}
+Industrial Designer: Huh . {vocalsound}
+Marketing: {vocalsound} Yeah . Very interesting .
+User Interface: Uh {disfmarker}
+Marketing: {vocalsound}
+Industrial Designer: {vocalsound}
+User Interface: {vocalsound}
+Project Manager: Industrial Designer . Interface concept .
+User Interface: {vocalsound} Yes , well uh let's uh talk about the interface uh concept . Uh , first I'll uh I'll uh discuss the buttons we just chose , uh show you some samples , uh uh discuss some colours and design maybe , already . And uh my personal preferences . {vocalsound} Well we chose the power button to switch the television on and off . The bu uh the mute button to switch the volume on and o on and off . The channels buttons , one to nine , and uh off uh uh zero to nine , and the uh button to choose uh higher channels than nine . Uh the volume and channel quadrants , uh left and right , up and down arrows , to uh do the volume and channel . And the menu menu
+...
+: {vocalsound} um we have one minute .
+User Interface: {vocalsound} {gap} .
+Marketing: {vocalsound} One .
+Project Manager: I think . No .
+Marketing: No . You have more .
+Project Manager: More . Seven .
+Marketing: You have still ten .
+Project Manager: Next meeting . Thirty minutes . So hurry up .
+Industrial Designer: Oh , that's us together .
+Project Manager: You two stay here . {vocalsound}
+Marketing: {vocalsound}
+Project Manager: Paint it .
+User Interface: Okay .
+Project Manager: Now you have to .
+User Interface: {vocalsound}
+Industrial Designer: {vocalsound}
+Project Manager: So {disfmarker}
+Marketing: {vocalsound}
+Project Manager: I think it's clear . Check your mail . So {disfmarker}
+Marketing: Yeah .
+Industrial Designer: Yes .
+Project Manager: It has to be ready in the next meeting . So {disfmarker} {vocalsound}
+User Interface: Cookie .
+Marketing: What ? Okay .
+Project Manager: Next meeting is called the detailed design . So {disfmarker} Everyth everything has to be ready . Thanks for your attention . {vocalsound} {vocalsound}
+Marketing: Okay .
+Industrial Designer: 'Kay .
+Marketing: See you at the next meeting .
+Industrial Designer: Bye bye .
+
+[QUESTION]
+What did Marketing talk about market trend findings?

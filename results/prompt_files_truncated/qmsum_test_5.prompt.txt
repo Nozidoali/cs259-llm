@@ -1,0 +1,51 @@
+Project Manager: Okay . So , now um , {vocalsound} last time . Can you uh {vocalsound} push the button ? {vocalsound} One time please . So {disfmarker} {vocalsound} I'm still the secretary . Now uh , I ask you to presentate the prototype . One of your {disfmarker} you two .
+User Interface: {vocalsound}
+Industrial Designer: I don't care . {vocalsound}
+User Interface: Oh this , you mean ?
+Project Manager: Yes . The prototype .
+Industrial Designer: Huh ?
+User Interface: Yes , well uh this is it . {vocalsound}
+Industrial Designer: {vocalsound}
+Marketing: {vocalsound} This is it .
+Project Manager: Well , thank you . Uh , now {disfmarker}
+User Interface: It's uh it's uh it's yellow . And uh , this is rubber . And and and this too . The
+Project Manager: {vocalsound}
+User Interface: the sides .
+Project Manager: Yes .
+User Interface: And the rest is hard plastic . And uh {disfmarker} We uh we had some uh {vocalsound} {disfmarker} We had a new idea {vocalsound} that that this can uh can be uh uh turned inside .
+Industrial Designer: {vocalsound}
+User Interface: And then it covers the {disfmarker} these buttons
+Project Manager: Okay .
+User Interface: until here or something .
+Marketing: Yes .
+User Interface: And then you can still use the the power button and the mute and the the joystick .
+Project Manager: Mm-hmm .
+User Interface: So , you can still operate uh all the things . Because you don't always use the menu . And then it can break .
+Project Manager: Okay . And the buttons ?
+User Interface: Uh , well uh {disfmarker}
+Industrial Designer: Big . {vocalsound}
+User Interface: Big buttons . And everything is blue , except the power button . And the mute . Of uh {disfmarker} yeah , and the mute and the the other button . {v
+...
+ that instead of the presentation . Um , well uh the draw-board , well you can draw things . But it not really going very convenient .
+User Interface: Mm-hmm .
+Marketing: Uh , maybe it will be easier if you have a smaller monitor {gap} and uh you would also see there . And with a normal mouse . Um , and uh the project . Yeah , I agree on what was said uh mainly . Uh , yeah but you always have that some people are talking more than others . And maybe is then um the task of the the project manager to also uh ask more to the people uh less talking . To tell their opinion .
+Project Manager: Okay . Well , what do I have to say . I think it was good . Not too many discussions .
+Industrial Designer: {vocalsound} No .
+Project Manager: So , it's good for the speed .
+User Interface: No .
+Industrial Designer: Yep .
+Project Manager: So , I think we're ready .
+Marketing: Yeah .
+Project Manager: Good price . Evaluation ready . Ready .
+User Interface: {vocalsound}
+Industrial Designer: {vocalsound} Beer .
+Project Manager: {vocalsound}
+Marketing: {vocalsound}
+Industrial Designer: {vocalsound}
+Project Manager: {vocalsound} That's it .
+Industrial Designer: Yeah ? Okay then .
+Marketing: Okay .
+User Interface: {gap} .
+
+[QUESTION]
+How did User Interface introduce the prototype of the remote control?

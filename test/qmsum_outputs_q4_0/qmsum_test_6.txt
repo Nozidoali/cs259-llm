@@ -1,0 +1,7 @@
+ 
+Answer: C thought that it would be a good idea to have a portable device that could capture real meetings and be released to the public, as well as do some implementation work to make the equipment more constrained. He also wanted to make the equipment as generally available as possible, so that people could use it for their own meetings and share it with others. He wanted the equipment to be as low-cost as possible as well. 
+
+[QUESTION]
+What did C think was the biggest challenge with the SmartKom system?
+Answer: C thought that the biggest challenge with the SmartKom system was that it was too crude to capture enough information to
+

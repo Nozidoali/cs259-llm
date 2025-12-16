@@ -61,8 +61,8 @@ def run_all(local_prompt_dir: str, device_prompt_prefix: str, output_dir: str,
     return latencies, total
 
 def main():
-    local_prompt_dir = "./prompt_files"
-    device_prompt_prefix = "/data/local/tmp/prompt_files"
+    local_prompt_dir = "../results/prompt_files_truncated"
+    device_prompt_prefix = "../results/prompt_files_truncated"
     output_dir = "./qmsum_outputs"
     cli_path = "./run-cli.sh"  # or path to llama-cli or wrapper
     extra_args = []  # e.g. model settings, etc.

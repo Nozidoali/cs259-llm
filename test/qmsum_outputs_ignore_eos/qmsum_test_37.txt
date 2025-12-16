@@ -1,0 +1,8 @@
+ and the meeting data in the meeting transcript.
+
+Based on the document, the main points discussed about the microphone data and the meeting data in the meeting transcript are:
+
+The microphone data was recorded at forty-eight kilohertz (48 kHz). The meeting data was recorded at sixteen kilohertz (16 kHz).
+
+The microphone data was recorded in the monitor, while the meeting data was recorded in the speaker channel. The microphone data was structured in terms of forty-eight kilohertz sampling, while the meeting data was structured in terms of sixteen kilohertz sampling. The microphone data was all structured in terms of forty-eight kilohertz sampling
+

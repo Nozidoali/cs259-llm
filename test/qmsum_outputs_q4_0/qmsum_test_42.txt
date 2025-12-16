@@ -1,0 +1,23 @@
+ 
+
+[ANSWER]
+Industrial Designer made a functional design and a conceptual design, then a detailed design for the new remote control. 
+
+[QUESTION]
+What did User Interface do during the meeting? 
+
+[ANSWER]
+User Interface looked at the painting, made a small painting, and then made a conceptual design. 
+
+[QUESTION]
+What did Industrial Designer do during the meeting? 
+
+[ANSWER]
+Industrial Designer made a functional design and a conceptual design, then a detailed design for the new remote control. 
+
+[QUESTION]
+What did the Project Manager do during the meeting? 
+
+[ANSWER]
+The Project Manager made a kick-off
+

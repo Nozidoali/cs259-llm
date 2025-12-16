@@ -169,6 +169,7 @@ Examples:
                 test_split=gating_config.get("test_split", 0.15),
                 seed=config.get("seed", 42),
                 prompt_dir=config.get("prompt_dir"),
+                per_token=gating_config.get("per_token", False),
             )
             gating_path = gating_output_dir
         else:
@@ -223,6 +224,7 @@ Examples:
                 num_experts_per_tok=merge_config.get("num_experts_per_tok"),
                 use_zero_shared_expert=merge_config.get("use_zero_shared_expert", True),
                 forced_expert_idx=merge_config.get("forced_expert_idx"),
+                use_per_token_routing=merge_config.get("use_per_token_routing"),
             )
             rmoe_path = rmoe_output_dir
             logger.info(f"MoE model (rmoe_model) created at: {rmoe_path}")
@@ -336,6 +338,7 @@ Examples:
                     shared_expert_path=merge_cfg.get("shared_expert_path"),
                     num_experts_per_tok=merge_cfg.get("num_experts_per_tok"),
                     use_zero_shared_expert=merge_cfg.get("use_zero_shared_expert", True),
+                    shared_expert_intermediate_size=merge_cfg.get("shared_expert_intermediate_size"),
                 )
                 qwen2_format_dir = work_dir / "rmoe_qwen2_format"
                 logger.info(f"Saving in Qwen2MoE format: {qwen2_format_dir}")

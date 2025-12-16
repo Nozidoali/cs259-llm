@@ -1,0 +1,45 @@
+Professor B: I think for two years we were two months , uh , away from being done .
+PhD A: And what was that , Morgan ? What project ?
+Professor B: Uh , the , uh , TORRENT chip .
+PhD A: Oh .
+Professor B: Yeah . We were two {disfmarker} we were {disfmarker}
+PhD C: Yeah .
+Professor B: Uh , uh , we went through it {disfmarker} Jim and I went through old emails at one point and {disfmarker} and for two years there was this thing saying , yeah , we 're {disfmarker} we 're two months away from being done . It was very {disfmarker} very believable schedules , too . I mean , we went through and {disfmarker} with the schedules {disfmarker} and we {disfmarker}
+PhD A: It was true for two years .
+Professor B: Yeah . Oh , yeah . It was very true .
+PhD A: So , should we just do the same kind of deal where we {pause} go around and do , uh , status report {pause} kind of things ? OK . And I guess when Sunil gets here he can do his last or something . So .
+Professor B: Yeah . So we {pause} probably should wait for him to come before we do his .
+PhD C: Mm - hmm .
+PhD A: OK . That 's a good idea .
+Professor B: Yeah .
+Grad F: OK .
+Professor B: Yeah .
+PhD A: Any objection ? Do y OK , M
+Professor B: All in favor
+PhD A: Do you want to start , Morgan ? Do you have anything , or {disfmarker} ?
+Professor B: Uh , I don't do anything . I {disfmarker} No , I mean , I {disfmarker} I 'm involved in discussions with {disfmarker} with people about what they 're doing , but I think they 're {disfmarker} since they 're here , they can talk about it themselves .
+Grad F: OK . So should I go so that , uh ,
+PhD A: Yeah .
+
+...
+ estimate the noise {pause} with the first frames and then apply the VAD ,
+Professor B: Mm - hmm .
+PhD C: Mm - hmm .
+PhD D: before the on - line normalization .
+PhD C: Mm - hmm .
+PhD D: We {disfmarker} we see {disfmarker} Well , I am thinking {vocalsound} about that and working about that ,
+Professor B: Yeah .
+PhD D: but I don't have result this week .
+Professor B: Sure . I mean , one of the things we 've talked about {disfmarker} maybe it might be star time to start thinking about pretty soon , is as we look at the pros and cons of these different methods , how do they fit in with one another ? Because {pause} we 've talked about potentially doing some combination of a couple of them . Maybe {disfmarker} maybe pretty soon we 'll have some sense of what their {pause} characteristics are ,
+PhD D: Mm - hmm .
+Professor B: so we can see what should be combined .
+PhD C: Mm - hmm .
+PhD A: Is that it ? OK ?
+Professor B: OK . Why don't we read some digits ?
+PhD A: Yep . Want to go ahead , Morgan ?
+Professor B: Sure .
+PhD A: Transcript L dash two one five .
+Professor B: O K .
+
+[QUESTION]
+What did Grad F say about his proposal?

@@ -49,30 +49,53 @@ class MoEFFN(nn.Module):
         return destination
     
     def forward(self, hidden_states):
-        batch_size = hidden_states.shape[0]
+        batch_size, seq_len = hidden_states.shape[0], hidden_states.shape[1]
+        use_per_token = getattr(self.parent_model, 'use_per_token_routing', False)
+        
         # Check if forced expert routing is enabled
         if hasattr(self.parent_model, 'forced_expert_idx') and self.parent_model.forced_expert_idx is not None:
             # Force routing to specific expert (bypass gating network)
             forced_idx = self.parent_model.forced_expert_idx
             if forced_idx < 0 or forced_idx >= self.num_experts:
                 raise ValueError(f"forced_expert_idx {forced_idx} is out of range [0, {self.num_experts-1}]")
-            gating_probs = torch.zeros(batch_size, self.num_experts, device=hidden_states.device, dtype=hidden_states.dtype)
-            gating_probs[:, forced_idx] = 1.0
-        elif hasattr(self.parent_model, '_current_gating_probs') and self.parent_model._current_gating_probs is not None:
-            if self.parent_model._current_gating_probs.dim() == 3:
-                gating_probs = self.parent_model._current_gating_probs[:, 0, :].to(hidden_states.dtype)
+            if use_per_token:
+                gating_probs = torch.zeros(batch_size, seq_len, self.num_experts, device=hidden_states.device, dtype=hidden_states.dtype)
+                gating_probs[:, :, forced_idx] = 1.0
             else:
-                gating_probs = self.parent_model._current_gating_probs.to(hidden_states.dtype)
+                gating_probs = torch.zeros(batch_size, self.num_experts, device=hidden_states.device, dtype=hidden_states.dtype)
+                gating_probs[:, forced_idx] = 1.0
+        elif hasattr(self.parent_model, '_current_gating_probs') and self.parent_model._current_gating_probs is not None:
+            gating_probs = self.parent_model._current_gating_probs.to(hidden_states.dtype)
+            # Handle shape: could be (batch_size, num_experts) or (batch_size, seq_len, num_experts)
+            if gating_probs.dim() == 2 and use_per_token:
+                # Expand per-sequence to per-token: [batch_size, num_experts] -> [batch_size, seq_len, num_experts]
+                gating_probs = gating_probs.unsqueeze(1).expand(-1, seq_len, -1)
+            elif gating_probs.dim() == 3 and not use_per_token:
+                # Use first token's probabilities for per-sequence routing
+                gating_probs = gating_probs[:, 0, :]
         else:
             logger.warning("_current_gating_probs not set, using equal probabilities")
-            gating_probs = torch.ones(batch_size, self.num_experts, device=hidden_states.device, dtype=hidden_states.dtype) / self.num_experts
+            if use_per_token:
+                gating_probs = torch.ones(batch_size, seq_len, self.num_experts, device=hidden_states.device, dtype=hidden_states.dtype) / self.num_experts
+            else:
+                gating_probs = torch.ones(batch_size, self.num_experts, device=hidden_states.device, dtype=hidden_states.dtype) / self.num_experts
         
         # Get shared expert gating probability (should be ~0 after training)
         if hasattr(self.parent_model, '_current_shared_expert_gate_prob') and self.parent_model._current_shared_expert_gate_prob is not None:
-            shared_gate_prob = self.parent_model._current_shared_expert_gate_prob.to(hidden_states.dtype)  # Shape: (batch_size, 1)
+            shared_gate_prob = self.parent_model._current_shared_expert_gate_prob.to(hidden_states.dtype)
+            # Handle shape: could be (batch_size, 1) or (batch_size, seq_len, 1)
+            if shared_gate_prob.dim() == 2 and use_per_token:
+                # Expand per-sequence to per-token: [batch_size, 1] -> [batch_size, seq_len, 1]
+                shared_gate_prob = shared_gate_prob.unsqueeze(1).expand(-1, seq_len, -1)
+            elif shared_gate_prob.dim() == 3 and not use_per_token:
+                # Use first token's probability for per-sequence routing
+                shared_gate_prob = shared_gate_prob[:, 0, :]
         else:
             logger.warning("_current_shared_expert_gate_prob not set, using 0 (no shared expert contribution)")
-            shared_gate_prob = torch.zeros(batch_size, 1, device=hidden_states.device, dtype=hidden_states.dtype)
+            if use_per_token:
+                shared_gate_prob = torch.zeros(batch_size, seq_len, 1, device=hidden_states.device, dtype=hidden_states.dtype)
+            else:
+                shared_gate_prob = torch.zeros(batch_size, 1, device=hidden_states.device, dtype=hidden_states.dtype)
         
         # Compute expert outputs
         expert_outputs = [expert_mlp(hidden_states) for expert_mlp in self.expert_mlps]
@@ -80,27 +103,50 @@ class MoEFFN(nn.Module):
         # Compute expert output (weighted sum or select one)
         if self.routing_mode == "weighted_sum":
             expert_output = torch.zeros_like(expert_outputs[0])
-            for idx, expert_out in enumerate(expert_outputs):
-                prob = gating_probs[:, idx].unsqueeze(-1).unsqueeze(-1)
-                expert_output += prob * expert_out
+            if use_per_token:
+                # Per-token weighted sum: gating_probs is [batch_size, seq_len, num_experts]
+                for idx, expert_out in enumerate(expert_outputs):
+                    prob = gating_probs[:, :, idx].unsqueeze(-1)  # [batch_size, seq_len, 1]
+                    expert_output += prob * expert_out
+            else:
+                # Per-sequence weighted sum: gating_probs is [batch_size, num_experts]
+                for idx, expert_out in enumerate(expert_outputs):
+                    prob = gating_probs[:, idx].unsqueeze(-1).unsqueeze(-1)  # [batch_size, 1, 1]
+                    expert_output += prob * expert_out
         else:
-            selected_expert = gating_probs.argmax(dim=-1)
-            expert_output = torch.zeros_like(expert_outputs[0])
-            for idx, expert_out in enumerate(expert_outputs):
-                mask = (selected_expert == idx).unsqueeze(-1).unsqueeze(-1)
-                expert_output += mask.float() * expert_out
+            # select_one routing
+            if use_per_token:
+                # Per-token selection: gating_probs is [batch_size, seq_len, num_experts]
+                selected_expert = gating_probs.argmax(dim=-1)  # [batch_size, seq_len]
+                expert_output = torch.zeros_like(expert_outputs[0])
+                for idx, expert_out in enumerate(expert_outputs):
+                    # Create mask: [batch_size, seq_len, hidden_dim]
+                    mask = (selected_expert == idx).unsqueeze(-1).float()  # [batch_size, seq_len, 1]
+                    expert_output += mask * expert_out
+            else:
+                # Per-sequence selection: gating_probs is [batch_size, num_experts]
+                selected_expert = gating_probs.argmax(dim=-1)  # [batch_size]
+                expert_output = torch.zeros_like(expert_outputs[0])
+                for idx, expert_out in enumerate(expert_outputs):
+                    mask = (selected_expert == idx).unsqueeze(-1).unsqueeze(-1).float()  # [batch_size, 1, 1]
+                    expert_output += mask * expert_out
         
         # Compute shared expert output
         shared_expert_output = self.shared_expert_mlp(hidden_states)
         
         # Combine: output = (1 - shared_prob) * expert_output + shared_prob * shared_expert_output
         # Since shared_prob should be ~0 and shared_expert is zero-initialized, this effectively uses only expert_output
-        output = (1.0 - shared_gate_prob.unsqueeze(-1)) * expert_output + shared_gate_prob.unsqueeze(-1) * shared_expert_output
+        if use_per_token:
+            # shared_gate_prob is [batch_size, seq_len, 1]
+            output = (1.0 - shared_gate_prob) * expert_output + shared_gate_prob * shared_expert_output
+        else:
+            # shared_gate_prob is [batch_size, 1]
+            output = (1.0 - shared_gate_prob.unsqueeze(-1)) * expert_output + shared_gate_prob.unsqueeze(-1) * shared_expert_output
         
         return output
 
 class MoEModel(nn.Module):
-    def __init__(self, expert_paths: List[Union[str, Path]], gating_model_path: Union[str, Path], base_model_path: Optional[Union[str, Path]] = None, routing_mode: Literal["weighted_sum", "select_one"] = "weighted_sum", device=None, shared_expert_path: Optional[Union[str, Path]] = None, num_experts_per_tok: Optional[int] = None, use_zero_shared_expert: bool = True, forced_expert_idx: Optional[int] = None):
+    def __init__(self, expert_paths: List[Union[str, Path]], gating_model_path: Union[str, Path], base_model_path: Optional[Union[str, Path]] = None, routing_mode: Literal["weighted_sum", "select_one"] = "weighted_sum", device=None, shared_expert_path: Optional[Union[str, Path]] = None, num_experts_per_tok: Optional[int] = None, use_zero_shared_expert: bool = True, forced_expert_idx: Optional[int] = None, use_per_token_routing: Optional[bool] = None, shared_expert_intermediate_size: Optional[int] = None):
         super().__init__()
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
@@ -108,10 +154,17 @@ class MoEModel(nn.Module):
         self.routing_mode = routing_mode
         self.num_experts_per_tok = num_experts_per_tok
         self.use_zero_shared_expert = use_zero_shared_expert
+        self.shared_expert_intermediate_size = shared_expert_intermediate_size
         # Qwen2MoE always requires shared expert
         self.use_shared_expert = True
         # Force routing to a specific expert (bypasses gating network)
         self.forced_expert_idx = forced_expert_idx
+        # Per-token routing: default True for select_one, False for weighted_sum
+        if use_per_token_routing is None:
+            self.use_per_token_routing = (routing_mode == "select_one")
+        else:
+            self.use_per_token_routing = use_per_token_routing
+        logger.info(f"Using per-token routing: {self.use_per_token_routing} (routing_mode={routing_mode})")
         expert_paths = [Path(p) for p in expert_paths]
         self.num_experts_total = len(expert_paths)
         if forced_expert_idx is not None:
@@ -322,7 +375,38 @@ class MoEModel(nn.Module):
             self.lm_head = base_model.model.lm_head
         logger.info(f"MoE model initialized with {len(expert_paths)} experts, routing_mode={routing_mode}")
     
-    def _get_embeddings(self, input_ids, attention_mask):
+    def get_per_token_embeddings(self, input_ids, attention_mask=None):
+        """
+        Extract per-token embeddings for fine-tuning the gating network.
+        
+        Args:
+            input_ids: Token IDs [batch_size, seq_len]
+            attention_mask: Attention mask [batch_size, seq_len]
+        
+        Returns:
+            Per-token embeddings [batch_size, seq_len, embedding_dim]
+        """
+        if attention_mask is None:
+            attention_mask = torch.ones_like(input_ids)
+        return self._get_embeddings(input_ids, attention_mask, per_token=True)
+    
+    def _get_embeddings(self, input_ids, attention_mask, per_token=None):
+        """
+        Get embeddings for gating network.
+        
+        Args:
+            input_ids: Token IDs [batch_size, seq_len]
+            attention_mask: Attention mask [batch_size, seq_len]
+            per_token: If True, return per-token embeddings [batch_size, seq_len, embedding_dim]
+                      If False, return averaged embeddings [batch_size, embedding_dim]
+                      If None, use self.use_per_token_routing
+        
+        Returns:
+            Embeddings for gating network
+        """
+        if per_token is None:
+            per_token = self.use_per_token_routing
+            
         with torch.no_grad():
             if hasattr(self.embedding_model, 'model') and hasattr(self.embedding_model.model, 'embed_tokens'):
                 embeddings = self.embedding_model.model.embed_tokens(input_ids)
@@ -331,11 +415,18 @@ class MoEModel(nn.Module):
             else:
                 raise ValueError("Could not find embedding layer in embedding model")
             
-            mask_expanded = attention_mask.unsqueeze(-1).expand(embeddings.size()).to(embeddings.dtype)
-            sum_embeddings = torch.sum(embeddings * mask_expanded, dim=1)
-            sum_mask = torch.clamp(attention_mask.sum(dim=1, keepdim=True), min=1e-9).to(embeddings.dtype)
-            mean_embeddings = sum_embeddings / sum_mask
-        return mean_embeddings
+            if per_token:
+                # Return per-token embeddings: [batch_size, seq_len, embedding_dim]
+                # Apply attention mask to zero out padding tokens
+                mask_expanded = attention_mask.unsqueeze(-1).expand(embeddings.size()).to(embeddings.dtype)
+                return embeddings * mask_expanded
+            else:
+                # Return averaged embeddings: [batch_size, embedding_dim]
+                mask_expanded = attention_mask.unsqueeze(-1).expand(embeddings.size()).to(embeddings.dtype)
+                sum_embeddings = torch.sum(embeddings * mask_expanded, dim=1)
+                sum_mask = torch.clamp(attention_mask.sum(dim=1, keepdim=True), min=1e-9).to(embeddings.dtype)
+                mean_embeddings = sum_embeddings / sum_mask
+                return mean_embeddings
     
     def forward(self, input_ids, attention_mask=None, labels=None, recompute_gating=True, **kwargs):
         if attention_mask is None:
@@ -350,18 +441,40 @@ class MoEModel(nn.Module):
         # Skip gating computation if forced expert routing is enabled
         if self.forced_expert_idx is not None:
             # Create one-hot gating probabilities for forced expert
-            gating_probs = torch.zeros(batch_size, self.num_experts_total, device=self.device)
-            gating_probs[:, self.forced_expert_idx] = 1.0
+            if self.use_per_token_routing:
+                gating_probs = torch.zeros(batch_size, seq_len, self.num_experts_total, device=self.device)
+                gating_probs[:, :, self.forced_expert_idx] = 1.0
+            else:
+                gating_probs = torch.zeros(batch_size, self.num_experts_total, device=self.device)
+                gating_probs[:, self.forced_expert_idx] = 1.0
             self._current_gating_probs = gating_probs
             # Shared expert should not be used when forcing a specific expert
-            self._current_shared_expert_gate_prob = torch.zeros(batch_size, 1, device=self.device)
+            if self.use_per_token_routing:
+                self._current_shared_expert_gate_prob = torch.zeros(batch_size, seq_len, 1, device=self.device)
+            else:
+                self._current_shared_expert_gate_prob = torch.zeros(batch_size, 1, device=self.device)
         # Only recompute gating if not already set or if explicitly requested
         elif recompute_gating or self._current_gating_probs is None:
             with torch.no_grad():
-                gating_input = self._get_embeddings(input_ids, attention_mask)
-                gating_probs = self.gating_network(gating_input)
-                # Always compute shared expert gating probability (required for Qwen2MoE)
-                shared_gate_prob = self.shared_expert_gating(gating_input)  # Shape: (batch_size, 1)
+                gating_input = self._get_embeddings(input_ids, attention_mask, per_token=self.use_per_token_routing)
+                
+                if self.use_per_token_routing:
+                    # Per-token routing: gating_input is [batch_size, seq_len, embedding_dim]
+                    batch_size_pt, seq_len_pt, embedding_dim = gating_input.shape
+                    # Reshape to [batch_size * seq_len, embedding_dim] for batch processing
+                    gating_input_flat = gating_input.view(-1, embedding_dim)
+                    gating_probs_flat = self.gating_network(gating_input_flat)  # [batch_size * seq_len, num_experts]
+                    # Reshape back to [batch_size, seq_len, num_experts]
+                    gating_probs = gating_probs_flat.view(batch_size_pt, seq_len_pt, self.num_experts_total)
+                    
+                    # Shared expert gating: [batch_size * seq_len, 1] -> [batch_size, seq_len, 1]
+                    shared_gate_prob_flat = self.shared_expert_gating(gating_input_flat)
+                    shared_gate_prob = shared_gate_prob_flat.view(batch_size_pt, seq_len_pt, 1)
+                else:
+                    # Per-sequence routing: gating_input is [batch_size, embedding_dim]
+                    gating_probs = self.gating_network(gating_input)  # [batch_size, num_experts]
+                    # Always compute shared expert gating probability (required for Qwen2MoE)
+                    shared_gate_prob = self.shared_expert_gating(gating_input)  # Shape: (batch_size, 1)
             self._current_gating_probs = gating_probs
             self._current_shared_expert_gate_prob = shared_gate_prob
         if hasattr(self.model, 'layers'):
@@ -397,10 +510,22 @@ class MoEModel(nn.Module):
                 # Skip gating computation if forced expert routing is enabled
                 if self.forced_expert_idx is None:
                     # Recompute gating probabilities based on current sequence state
-                    gating_input = self._get_embeddings(generated, attention_mask)
-                    gating_probs = self.gating_network(gating_input)
-                    # Always compute shared expert gating probability (required for Qwen2MoE)
-                    shared_gate_prob = self.shared_expert_gating(gating_input)  # Shape: (batch_size, 1)
+                    gating_input = self._get_embeddings(generated, attention_mask, per_token=self.use_per_token_routing)
+                    
+                    if self.use_per_token_routing:
+                        # Per-token routing: gating_input is [batch_size, seq_len, embedding_dim]
+                        batch_size_pt, seq_len_pt, embedding_dim = gating_input.shape
+                        gating_input_flat = gating_input.view(-1, embedding_dim)
+                        gating_probs_flat = self.gating_network(gating_input_flat)
+                        gating_probs = gating_probs_flat.view(batch_size_pt, seq_len_pt, self.num_experts_total)
+                        
+                        shared_gate_prob_flat = self.shared_expert_gating(gating_input_flat)
+                        shared_gate_prob = shared_gate_prob_flat.view(batch_size_pt, seq_len_pt, 1)
+                    else:
+                        # Per-sequence routing: gating_input is [batch_size, embedding_dim]
+                        gating_probs = self.gating_network(gating_input)
+                        shared_gate_prob = self.shared_expert_gating(gating_input)
+                    
                     self._current_gating_probs = gating_probs
                     self._current_shared_expert_gate_prob = shared_gate_prob
                     # Forward pass with updated routing (recompute_gating=False since we just computed it)
@@ -577,7 +702,12 @@ class MoEModel(nn.Module):
             base_config['moe_intermediate_size'] = moe_intermediate_size
         
         # Qwen2MoE always requires shared expert
-        if self.use_zero_shared_expert or self.shared_expert_model is None:
+        # Check if shared_expert_intermediate_size is explicitly configured
+        if self.shared_expert_intermediate_size is not None:
+            shared_expert_intermediate_size = self.shared_expert_intermediate_size
+            base_config['shared_expert_intermediate_size'] = shared_expert_intermediate_size
+            logger.info(f"Shared expert intermediate size (configured): {shared_expert_intermediate_size}")
+        elif self.use_zero_shared_expert or self.shared_expert_model is None:
             # Use same intermediate size as regular experts
             shared_expert_intermediate_size = moe_intermediate_size
             base_config['shared_expert_intermediate_size'] = shared_expert_intermediate_size
@@ -604,7 +734,8 @@ class MoEModel(nn.Module):
         rmoe_metadata = {
             "original_model_type": "rmoe",
             "routing_mode": self.routing_mode,
-            "per_sequence_routing": True,
+            "per_token_routing": self.use_per_token_routing,
+            "per_sequence_routing": not self.use_per_token_routing,
             "gating_network_type": "linear",
             "num_experts": num_experts,
         }

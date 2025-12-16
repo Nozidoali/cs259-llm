@@ -1,0 +1,4 @@
+ 
+
+Based on the doc, the professor thinks that MSG may have some potential to improve over other approaches, but it is not clear from the doc what the potential improvements are. The doc mentions that MSG may have a different training set that gives better results, but it does not specify what that set is or how it works. The doc mentions that MSG may have different temporal properties that make it better, but it does not specify what those properties are or how they work. So the professor thinks that MSG may have potential improvements over other approaches, but it is not clear from the doc what those potential improvements are or how they work. The doc
+

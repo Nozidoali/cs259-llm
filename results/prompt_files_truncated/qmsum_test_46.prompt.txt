@@ -1,0 +1,50 @@
+Marketing: {vocalsound} Okay . Oh I totally {disfmarker} Yeah 'cause I moved it . {vocalsound} 'S put it over here . Then we don't have to worry about it .
+User Interface: {vocalsound} Ready for this ?
+Project Manager: All set ? Cool . Alright , it is PowerPoint time . I've done more PowerPoints in this particular experiment than I've ever done in my life before this experiment {vocalsound}
+Industrial Designer: {vocalsound} Yeah {vocalsound} .
+Project Manager: which is kind of fun .
+User Interface: {vocalsound} Oh man . {vocalsound}
+Project Manager: So uh here we have our detailed design meeting where we will um look at the prototype and um {vocalsound} {disfmarker} right so um , I finally figured out what this whole second bullet point is about in my {disfmarker} that my coach was sending to me . It means I'm supposed to read the minutes from the previous meeting .
+Industrial Designer: Oh really ?
+Project Manager: I think . {vocalsound}
+Industrial Designer: Okay .
+Marketing: Huh .
+Project Manager: I don't know . Otherwise it's just saying I'm the secretary
+Marketing: {vocalsound} {vocalsound}
+Project Manager: and I'm {disfmarker} therefore I'm taking the minutes , s so just to go um {vocalsound} just real briefly to go over minutes from last meeting , uh , I will open them slowly , no ? Wait for it , wait for it . {vocalsound}
+Marketing: Yeah that's not you . {vocalsound}
+Project Manager: No . That's how the {disfmarker}
+Industrial Designer: {vocalsound}
+Project Manager: {vocalsound} Wait .
+User Interface: {vocalsound}
+Project Manager: This is , this is very high-powered stuff here , double-clicking , there we go . So um basically the moral of the story from our last minute uh {disfmarker} last meeting was that {vocalsound} um we that
+...
+: I think so . I think that's a closer .
+Project Manager: Cool .
+Industrial Designer: Has it been forty minutes or whatever ? {gap} this has been long enough .
+User Interface: {vocalsound} Celebrate .
+Marketing: {vocalsound}
+Industrial Designer: {vocalsound}
+Project Manager: Where do you find that ?
+Marketing: {vocalsound} I have no idea .
+User Interface: {vocalsound}
+Industrial Designer: Is that the only song you have ?
+User Interface: There is another one . {vocalsound}
+Project Manager: Is this one of those media player ?
+Industrial Designer: {vocalsound}
+Marketing: {vocalsound}
+User Interface: Huh ?
+Project Manager: W oh .
+Industrial Designer: That's awesome .
+User Interface: Yep . {vocalsound}
+Project Manager: The default track . I thought it was David Burns , look into the eyeball .
+Industrial Designer: Maybe I have a different one .
+Project Manager: That's one that seems to be shipping with it uh shipped with for a while , maybe this is the new version .
+Marketing: So is that a close ?
+Project Manager: Yeah , I guess we'll call that a a doner .
+Marketing: Okay , that's the end of the meeting .
+Project Manager: Fab .
+Marketing: Thank you gentlemen . I feel like I'm signing off .
+
+[QUESTION]
+Summarize the review of some problems from the past meetings.

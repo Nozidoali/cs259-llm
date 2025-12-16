@@ -1,0 +1,10 @@
+ 
+
+The discussion about the design goal of the remote control is about the user interface and the conceptual design, with the goal of making a project plan with the help of the user. The key decisions are:
+
+  1. The user interface should be user-friendly and original.
+  2. The conceptual design should be trendy and functional.
+  3. The detailed design should be detailed and detailed.
+
+The decision is made by the Project Manager and the Marketing team. The user interface is the most important decision, followed by the conceptual and detailed design. The user interface is the most important decision because it determines the user's experience with the
+

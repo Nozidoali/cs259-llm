@@ -1,0 +1,38 @@
+Marketing: {vocalsound} That went well , thank you .
+Project Manager: That's great .
+Industrial Designer: {vocalsound} 'Kay .
+Marketing: Perfect .
+Project Manager: Alright , let me just PowerPoint this up . {vocalsound} {vocalsound} {vocalsound} Right so um this meeting will be about the conceptual design , don't ask me s precisely what conceptual design is , it's just something important that we need to do . Um , think of it {disfmarker} 's kind of uh turning the abstract into slightly more concrete . In this meeting ideally we'll come to some final decisions on what we're gonna do for the prototype . Um . Right so um , apologies for the last meeting , it was brought to my attention that I did not make the roles clear enough , um , so I will attempt to do so more accurately in this particular meeting . Um , fair enough , thanks for the input , 's always good . Um . So , basically all we're gonna do is have some presentations again much like last time , um , and gonna go through you , uh whoever wants to go first is f fine by me um and we'll collate what we know about um what we discussed in the last meeting , possible directions . {vocalsound} And then we'll make some more decisions on um basic uh firm up our idea on how we want this remote control to look and work . So , perfect . So , without th further ado , whoever wants to go first is free to .
+Industrial Designer: I'll go first .
+Project Manager: Alright Nathan ,
+Marketing: Go ahead .
+Project Manager: take it away . It is Nathan right ? I'm not calling you the wrong name over and over again ?
+Industrial Designer: No Nathan's fine .
+Marketing: {vocalsound}
+Project Manager: {vocalsound} Good .
+Industrial Designer: It's either Nathan or participant two .
+Project Manager: {vocalsound}
+Marketing: {vocalsound}
+User Interface: {vocalsound} Mister participant two that is . {vocalsound}
+Industrial Designer: Uh .
+Project Manager: {vocalsound}
+Marketing: Nice .
+Industrial Designer
+...
+ , given these parameters that we're just gonna sort of have this kind of uh non-remote remote . Um , what are our broad constraints before we deve design a prototype . {vocalsound}
+Industrial Designer: Right .
+Project Manager: And um Ron if you can figure out how probably best to lay out this idea of this simple design with the voice recognition built in and also this kind of drop down or s on the side kind of menu options simple . Somehow work out how we can get this all s in the same place . Um , and if you can check product evaluation with m some pilots and stuff . Um I need you guys to work together on making a prototype , {vocalsound} um {vocalsound} using um {vocalsound} prototype building materials um {vocalsound} .
+Industrial Designer: {vocalsound} {vocalsound}
+User Interface: {vocalsound}
+Marketing: {vocalsound}
+Project Manager: And also um specific instructions will be sent to you by your coaches as well .
+Industrial Designer: Oh excellent yeah .
+Project Manager: So that's what to start with for now , is that alright , you guys feel clear about this ?
+Marketing: Cool .
+Industrial Designer: That sounds good .
+User Interface: Fabulous .
+Project Manager: Alright . I guess we'll just hit the bricks . Thanks guys .
+Marketing: Cool .
+
+[QUESTION]
+What did the User Interface think about their previous suggestions when discussing the user interface?

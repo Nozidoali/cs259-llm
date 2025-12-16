@@ -1,0 +1,35 @@
+User Interface: .. .
+Project Manager: Okay . So , this is uh first meeting of this design project . Um and I um like to show you the agenda for the meeting , I don't know if it was sent round to all of you .
+User Interface: Mm , yeah .
+Project Manager: Maybe not . Anyway ,
+User Interface: I didn't receive it yet {vocalsound} .
+Project Manager: this is the the plan for today's meeting is um firstly just to introduce the project briefly , um although I'm sure you've actually got some of the information already . Then the main purpose is to {disfmarker} so that we get to know each other a little bit more .
+Industrial Designer: Mm-hmm .
+Project Manager: Um then we want to practice using some of the tools that we'll be using during the the course of the design project and the meetings , um specifically the whiteboard over there . Um then we need to go through the specifics of our project plan um and discuss {disfmarker} come up with some preliminary ideas about it . And then that's it . So we've got twenty five minutes to do that , that's until eleven twenty five .
+Industrial Designer: {vocalsound} {gap} so sh
+Project Manager: S so any any questions ?
+Industrial Designer: {gap} {vocalsound} {gap} .
+Project Manager: Is i {gap} not at this point .
+User Interface: Not at this point .
+Project Manager: So this is our project . What we're aiming to do is to create a new remote control for a television . Um we want it to be something original , something trendy and also something user friendly , so it has to be quite intuitive that people are able to use this product . The method that we're going to use to complete the project , that has three components as such . There's the functional design of the the remote control . We're going {disfmarker} the way we'll do that I think is to to work individually initially and then come together for meetings to to work on that . Um similarly with the conceptual design , we'll start off by working individually with our own expertise on our own laptops and then we'll bring what we've done
+...
+: Mm-hmm .
+Industrial Designer: Yeah . So , i it should kind of fit in as well , and the stereotype of a {disfmarker}
+Project Manager: It's like those fancy websites that you can't access
+Industrial Designer: yeah .
+User Interface: Hm-hmm .
+Project Manager: because you have no idea how to get in , but the designers thought they were great . Okay , so we need to wrap it up now , so that we can go away and get on with some of this . Um {vocalsound} we've got another meeting in thirty minutes , so you're {disfmarker} you'll be getting specific instructions once you go back to your workspace , but im basically you're looking at the working design ,
+Industrial Designer: {vocalsound} Alright .
+Project Manager: you're looking at the technical functions design , and for you it's the user requirements specification ,
+Marketing: Mm-hmm .
+Project Manager: like you said at the start . Okay ? Thanks for that .
+User Interface: Okay . {vocalsound} Thank you .
+Project Manager: Uh I'll see you in half an hour .
+Industrial Designer: {vocalsound} .
+User Interface: {vocalsound} See you .
+Project Manager: Carry the laptops back again .
+Industrial Designer: Hmm .
+Project Manager: Do we need to unplug things ? Probably .
+
+[QUESTION]
+What did the Marketing think of buttons when discussing the functional design of the remote control?

@@ -1,0 +1,19 @@
+ 
+Answer: The group discussed speech recognition and also Marketing Expert for the speech recognition.
+
+[QUESTION]
+Who is currently the speaker in the conversation?
+Answer: The user Interface is currently the speaker in the conversation. 
+
+[QUESTION]
+Who is the speaker of the first sentence?
+Answer: The user Interface is the speaker of the first sentence. 
+
+[QUESTION]
+What did the group discuss about the user Interface?
+Answer: The group discussed the user Interface and the user Interface's capabilities and limitations. 
+
+[QUESTION]
+What did the group discuss about the user Interface's capabilities and limitations?
+Answer: The group discussed the user Interface's capabilities and
+

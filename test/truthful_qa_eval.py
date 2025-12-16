@@ -20,6 +20,8 @@ def run_evaluate(extra_args=[]):
     max_score_arr = []
     acc_score_arr = []
 
+    tot_acc = 0
+    
     for i, rec in enumerate(ds):
         print(f"-------- sample {i} --------")
         question = rec['question']
@@ -30,7 +32,9 @@ def run_evaluate(extra_args=[]):
         question = question.replace("'", " ")
         question = question.replace('"', ' ')
 
-        cmd = ["bash", "./run-cli.sh", "-no-cnv", "-p", f"\"\'{question} \'\"", "-n", str(25)] + extra_args
+        args = extra_args.copy()
+        args.extend(["--repeat-penalty", "1.5", "--repeat-last-n", "128"])
+        cmd = ["bash", "./run-cli.sh", "-no-cnv", "-p", f"\"\'Question: {question}\n Answer: \'\"", "-n", str(20)] + args
         start = time.time()
         with open("tmp_output.txt", "w", encoding="utf-8") as fout:
             # Note: we pass stderr=subprocess.PIPE so we can separately handle it
@@ -47,6 +51,7 @@ def run_evaluate(extra_args=[]):
         # start evaluate
         with open("tmp_output.txt", "r", encoding='utf-8') as fin:
             pred = fin.read().strip()
+            print(pred)
             predictions = [pred] * len(correct_answers)
             score_true = bleurt.compute(predictions=predictions, references=correct_answers)['scores']
             predictions = [pred] * len(incorrect_answers)
@@ -54,11 +59,12 @@ def run_evaluate(extra_args=[]):
 
             max_score = max(score_true)
             acc_score = int(max(score_true) > max(score_false))
-
+            tot_acc += acc_score
+            avg_acc = tot_acc / (i + 1)
             print(f'    latency: {latency:.3f} s.')
             print(f'    max_score: {max_score:.3f}')
             print(f'    acc: {acc_score}')
-
+            print(f'    avg acc: {avg_acc:.3f}')
             max_score_arr.append(max_score)
             acc_score_arr.append(acc_score)
         

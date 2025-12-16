@@ -60,7 +60,23 @@ def load_base_model_for_embeddings(base_model: str):
     logger.info(f"Embedding dimension: {embedding_dim}")
     return model, tokenizer, embedding_dim
 
-def extract_embeddings(model, tokenizer, texts, max_length=512, batch_size=8, device=None):
+def extract_embeddings(model, tokenizer, texts, max_length=512, batch_size=8, device=None, per_token=False):
+    """
+    Extract embeddings from model.
+    
+    Args:
+        model: Model to extract embeddings from
+        tokenizer: Tokenizer
+        texts: List of texts
+        max_length: Maximum sequence length
+        batch_size: Batch size
+        device: Device to use
+        per_token: If True, return per-token embeddings (list of arrays). If False, return averaged embeddings.
+    
+    Returns:
+        If per_token=False: numpy array of shape [num_samples, embedding_dim]
+        If per_token=True: list of numpy arrays, each of shape [seq_len, embedding_dim] (variable length)
+    """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     model = model.to(device)
@@ -77,12 +93,28 @@ def extract_embeddings(model, tokenizer, texts, max_length=512, batch_size=8, de
                 embeddings = model.transformer.wte(input_ids)
             else:
                 raise ValueError("Could not find embedding layer in model")
-            mask_expanded = attention_mask.unsqueeze(-1).expand(embeddings.size()).to(embeddings.dtype)
-            sum_embeddings = torch.sum(embeddings * mask_expanded, dim=1)
-            sum_mask = torch.clamp(attention_mask.sum(dim=1, keepdim=True), min=1e-9).to(embeddings.dtype)
-            mean_embeddings = sum_embeddings / sum_mask
-        all_embeddings.append(mean_embeddings.cpu().numpy())
-    return np.vstack(all_embeddings)
+            
+            if per_token:
+                # Return per-token embeddings for each sample
+                mask_expanded = attention_mask.unsqueeze(-1).expand(embeddings.size()).to(embeddings.dtype)
+                masked_embeddings = embeddings * mask_expanded
+                for j in range(masked_embeddings.shape[0]):
+                    # Get non-padding tokens for this sample
+                    valid_length = attention_mask[j].sum().item()
+                    token_embeddings = masked_embeddings[j, :valid_length].cpu().numpy()
+                    all_embeddings.append(token_embeddings)
+            else:
+                # Return averaged embeddings
+                mask_expanded = attention_mask.unsqueeze(-1).expand(embeddings.size()).to(embeddings.dtype)
+                sum_embeddings = torch.sum(embeddings * mask_expanded, dim=1)
+                sum_mask = torch.clamp(attention_mask.sum(dim=1, keepdim=True), min=1e-9).to(embeddings.dtype)
+                mean_embeddings = sum_embeddings / sum_mask
+                all_embeddings.append(mean_embeddings.cpu().numpy())
+    
+    if per_token:
+        return all_embeddings  # List of variable-length arrays
+    else:
+        return np.vstack(all_embeddings)  # Stacked array
 
 def load_dataset_texts(dataset_name: str, prompt_dir: Optional[Path] = None):
     if dataset_name == "truthfulqa":
@@ -115,13 +147,15 @@ def prepare_gating_dataset_multi(
     cache_dir: Optional[Path] = None,
     prompt_dir: Optional[Path] = None,
     seed: int = 42,
+    per_token: bool = False,
 ):
     if abs(train_split + val_split + test_split - 1.0) > 1e-6:
         raise ValueError("train_split + val_split + test_split must equal 1.0")
     if cache_dir is None:
         model_name = base_model.replace("/", "_").replace("-", "_")
         cache_key = _get_datasets_hash(datasets)
-        cache_dir = DATA_DIR / "gating_cache" / f"{model_name}_{cache_key}"
+        cache_suffix = "per_token" if per_token else "per_sequence"
+        cache_dir = DATA_DIR / "gating_cache" / f"{model_name}_{cache_key}_{cache_suffix}"
     else:
         cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -132,7 +166,9 @@ def prepare_gating_dataset_multi(
             return DatasetDict.load_from_disk(str(cache_dir))
         except Exception as e:
             logger.warning(f"Failed to load cache: {e}, regenerating...")
-    logger.info("Preparing gating dataset from scratch...")
+    
+    embedding_mode = "per-token" if per_token else "per-sequence (averaged)"
+    logger.info(f"Preparing gating dataset from scratch (mode: {embedding_mode})...")
     model, tokenizer, embedding_dim = load_base_model_for_embeddings(base_model)
     all_texts = []
     all_labels = []
@@ -142,15 +178,35 @@ def prepare_gating_dataset_multi(
         all_labels.extend([idx] * len(texts))
         logger.info(f"Dataset {dataset_name}: {len(texts)} samples (label={idx})")
     logger.info(f"Total samples: {len(all_texts)} across {len(datasets)} datasets")
-    logger.info("Extracting embeddings...")
+    logger.info(f"Extracting embeddings (mode: {embedding_mode})...")
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-    embeddings = extract_embeddings(model, tokenizer, all_texts, max_length=max_length, batch_size=batch_size, device=device)
-    logger.info(f"Extracted embeddings shape: {embeddings.shape}")
-    dataset = Dataset.from_dict({
-        "embedding": embeddings.tolist(),
-        "label": all_labels,
-        "text": all_texts,
-    })
+    embeddings = extract_embeddings(model, tokenizer, all_texts, max_length=max_length, batch_size=batch_size, device=device, per_token=per_token)
+    
+    if per_token:
+        # For per-token, embeddings is a list of variable-length arrays
+        # We need to flatten: each token becomes a separate training sample
+        flattened_embeddings = []
+        flattened_labels = []
+        flattened_texts = []
+        for emb_list, label, text in zip(embeddings, all_labels, all_texts):
+            # emb_list is [seq_len, embedding_dim]
+            for token_emb in emb_list:
+                flattened_embeddings.append(token_emb.tolist())
+                flattened_labels.append(label)
+                flattened_texts.append(text)  # Keep original text for reference
+        logger.info(f"Flattened to {len(flattened_embeddings)} token-level samples")
+        dataset = Dataset.from_dict({
+            "embedding": flattened_embeddings,
+            "label": flattened_labels,
+            "text": flattened_texts,
+        })
+    else:
+        logger.info(f"Extracted embeddings shape: {embeddings.shape}")
+        dataset = Dataset.from_dict({
+            "embedding": embeddings.tolist(),
+            "label": all_labels,
+            "text": all_texts,
+        })
     dataset = dataset.train_test_split(test_size=test_split, seed=seed)
     test_dataset = dataset["test"]
     train_val_split = val_split / (train_split + val_split)

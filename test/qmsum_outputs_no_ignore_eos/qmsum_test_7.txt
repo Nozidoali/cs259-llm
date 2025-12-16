@@ -1,0 +1,22 @@
+ 
+Answer:
+The professor thought MSG was a good net, but he didn't find it very useful in the MSG problem.
+
+[SELECTION]
+Is MSG still useful in the MSG problem?
+
+Answer:
+Yes, MSG is still useful in the MSG problem, but it's not as good as PLP in terms of accuracy.
+
+[SELECTION]
+What are the limitations of MSG?
+
+Answer:
+MSG has a limited number of parameters and isn't very efficient in terms of training time and CPU memory.
+
+[SELECTION]
+What is the impact of MSG on performance?
+
+Answer:
+MSG has a limited impact on performance, but it can improve accuracy slightly
+

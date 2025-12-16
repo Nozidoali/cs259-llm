@@ -1,0 +1,17 @@
+ 
+
+[ANSWER]
+The User Interface thought that the previous suggestions were not good because they did not have enough information about the market research to make informed decisions about the user interface.
+
+[QUESTION]
+What is the User Interface's view on the cost of the user interface?
+
+[ANSWER]
+The User Interface is uncertain about the cost of the user interface, as they do not have enough information about the market research to make an informed decision about it. 
+
+[QUESTION]
+What are the constraints on the User Interface when designing a prototype?
+
+[ANSWER]
+The User Interface has constraints on the design of the prototype because it must have a simple
+

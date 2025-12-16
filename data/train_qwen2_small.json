@@ -46,6 +46,7 @@
     "use_zero_shared_expert": true,
     "comment_use_zero_shared_expert": "Set to true to use zero-initialized shared expert (required for Qwen2MoE)",
     "shared_expert_path": null,
+    "shared_expert_intermediate_size": 0,
     "comment_shared_expert_path": "null = use base_model as shared expert, or specify path to different model"
   },
   
@@ -70,7 +71,7 @@
     "verify_conversion": true
   },
 
-  "quantize": "q8_0",
+  "quantize": "tq1_0",
   "comment_quantize": "Quantization type for final GGUF model. Options: Q4_0, Q4_K_M, Q5_K_M, Q8_0, etc.",
   
   "gguf_output": null,

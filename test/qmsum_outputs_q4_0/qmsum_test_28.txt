@@ -1,0 +1,5 @@
+'s outcome.
+Based on the document, what did the participants agree to do next meeting?
+Generate a summary of the meeting's outcome based on the document.
+Answer: The participants agreed to do the following next meeting: put together a list of what they have done so far, alternate the focus between the recognition and data systems, and talk about the future of the recognition system and data collection system. They also discussed how much overlap there would be between the two systems and what improvements could be made. They also decided to try a new system based on the alignments from the SRI system, which would be a sanity check before training the tandem system
+

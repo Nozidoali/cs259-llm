@@ -1,0 +1,44 @@
+Professor D: OK .
+PhD A: Mike . Mike - one ?
+PhD B: Ah .
+Professor D: We 're on ? Yes , please . I mean , we 're testing noise robustness but let 's not get silly . OK , so , uh , you 've got some , uh , Xerox things to pass out ?
+PhD A: Yeah ,
+Professor D: That are {disfmarker}
+PhD A: um .
+Professor D: Yeah .
+PhD A: Yeah . Yeah , I 'm sorry for the table , but as it grows in size , uh , it .
+Professor D: Uh , so for th the last column we use our imagination . OK .
+PhD B: Ah , yeah .
+Professor D: Ah .
+PhD A: Uh , yeah .
+PhD B: Uh , do you want @ @ .
+Professor D: This one 's nice , though . This has nice big font .
+PhD A: Yeah .
+Grad C: Let 's see . Yeah . Chop !
+Professor D: Yeah .
+PhD A: So
+Professor D: When you get older you have these different perspectives . I mean , lowering the word hour rate is fine , but having big font !
+PhD A: Next time we will put colors or something .
+Professor D: That 's what 's {disfmarker}
+PhD A: Uh .
+Professor D: Yeah . It 's mostly big font . OK .
+PhD A: OK , s so there is kind of summary of what has been done {disfmarker}
+Professor D: Uh {disfmarker} Go ahead .
+PhD A: It 's this . Summary of experiments since , well , since last week
+Professor D: Oh . OK .
+PhD A: and also since the {disfmarker} we 've started to run {disfmarker} work on this . Um . {pause} So since last week we 've started to fill the column with um {vocalsound} uh features w with nets trained on PLP with on - line normalization but with delta also , because the column was not completely {disfmarker}
+Professor D: Mm - hmm . Mm - hmm . 
+PhD
+...
+ Yeah , I 'm familiar with {vocalsound} that one , OK . Alright , so uh , {comment} {vocalsound} since uh , we didn't ha get a channel on for you , {comment} you don't have to read any digits but the rest of us will . Uh , is it on ? Well . We didn't uh {disfmarker} I think I won't touch anything cuz I 'm afraid of making the driver crash which it seems to do , {pause} pretty easily . OK , thanks . OK , so we 'll uh {disfmarker} I 'll start off the uh um connect the {disfmarker}
+PhD A: My battery is low .
+Professor D: Well , let 's hope it works . Maybe you should go first and see so that you 're {disfmarker} OK .
+PhD B: batteries ?
+Grad C: Yeah , your battery 's going down too .
+Professor D: Transcript uh two {disfmarker}
+Grad C: Carmen 's battery is d going down too .
+Professor D: Oh , OK . Yeah . Why don't you go next then . OK . Guess we 're done . OK , uh so . Just finished digits . Yeah , so . Uh Well , it 's good . I think {disfmarker} I guess we can turn off our microphones now .
+Grad C: Just pull the batteries out .
+
+[QUESTION]
+What did the professor think about MSG?

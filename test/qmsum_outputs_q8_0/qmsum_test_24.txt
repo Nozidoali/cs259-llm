@@ -1,0 +1,11 @@
+ [ANSWER]
+Marketing argued that the criteria were not clear and that they should have mentioned the user's operating behavior more explicitly, which would have helped make the criteria more clear and applicable to the user.
+
+[QUESTION]
+What did Project Manager think of the criteria that Marketing presented? [ANSWER]
+Project Manager thought the criteria were clear and applied to the user, but that Marketing's criteria were more detailed and could have been more useful for the user.
+
+[QUESTION]
+What did Project Manager agree with Marketing about the criteria? [ANSWER]
+Project Manager agreed with Marketing that the criteria were not clear and that they should have mentioned the user
+

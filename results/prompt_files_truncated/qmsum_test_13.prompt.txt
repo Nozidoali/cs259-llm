@@ -1,0 +1,56 @@
+Project Manager: Uh fourth meeting . {vocalsound}
+User Interface: We have to do what ?
+Project Manager: Some extra deciding .
+Industrial Designer: {vocalsound} W what ? Alri alright . We'll see .
+Project Manager: {vocalsound} Well {disfmarker}
+User Interface: Oh .
+Project Manager: {gap} I'll show you the notes again . Very interesting .
+Industrial Designer: {vocalsound}
+Project Manager: Well you'll you two will uh present us your prototype .
+Industrial Designer: Yeah .
+Project Manager: Then um {disfmarker} I guess that's your bit ? I I didn't s see anything about it ,
+Marketing: Yeah .
+Project Manager: so {vocalsound} I already uh thought you uh you were {gap} to do that .
+Industrial Designer: {vocalsound}
+Project Manager: So the you're uh {gap} .
+Marketing: {vocalsound}
+Project Manager: I'll show you how we're going to do with financing this uh design .
+User Interface: Mm .
+Industrial Designer: Yeah , that's important too . Yeah . {vocalsound}
+Project Manager: And then we'll evaluate , after after we have redesigned it .
+User Interface: {vocalsound} Bit late . {vocalsound}
+Project Manager: Because uh well we'll see about the costs . Um we'll uh evaluate our p our uh production and then uh we can close .
+Industrial Designer: Alright .
+Project Manager: Well the finance uh we'll do later , so um firstly uh {vocalsound} I'll show you the notes . {vocalsound} I don't think it's very interesting . {vocalsound}
+User Interface: I think it is .
+Project Manager: Oh nei . Uh no . {vocalsound} Alright . This is copy paste . So {disfmarker}
+Industrial Designer: From me of course , yeah .
+Project Manager: Of course . You had some very strange layout .
+Industrial Designer: Well from us all , yeah , from all of us . Yeah . {vocalsound} It's a nice chorus , yeah .
+Project Manager: {vocalsound
+...
+ocalsound}
+Industrial Designer: {vocalsound} Yeah , I like that . {vocalsound}
+Project Manager: {vocalsound} We couldn't put the fashion into the electronics .
+User Interface: {vocalsound}
+Industrial Designer: Blame our accountants .
+Marketing: Do that .
+Project Manager: {vocalsound} Yeah , that's a nice title . {vocalsound}
+User Interface: {vocalsound}
+Marketing: Yeah .
+Industrial Designer: {vocalsound} But we couldn't , yeah . {vocalsound}
+Marketing: {vocalsound} {vocalsound} Very catching . {vocalsound}
+Industrial Designer: {vocalsound} {vocalsound}
+Project Manager: Oh .
+Industrial Designer: Well I th Yeah .
+Marketing: I'm sure management would like that . {vocalsound}
+Project Manager: {vocalsound} Well {disfmarker}
+Industrial Designer: {vocalsound}
+User Interface: She's on the move .
+Project Manager: I'm going to resign after this project anyway , so {disfmarker} {vocalsound}
+Marketing: {vocalsound} Oh , that's just great .
+Project Manager: {vocalsound} {vocalsound}
+User Interface: {vocalsound}
+
+[QUESTION]
+What did the User Interface think of using titanium when discussing product cost and quotation?

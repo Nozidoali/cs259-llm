@@ -1,0 +1,59 @@
+Project Manager: Mm .
+Marketing: So ,
+Project Manager: So , uh now {vocalsound}
+Marketing: Hi Christa . {vocalsound}
+Project Manager: it's the {disfmarker} {vocalsound} Hi Sammy . {vocalsound} It's the detail design meeting , so we're going {disfmarker} last meeting . So um , first uh Mark and Rama are going to present uh the prototype . Uh then uh Sammy will propose some uh crite cr criteria to evaluate this prototype . Then , w we {disfmarker} {vocalsound}
+User Interface: {vocalsound} {vocalsound} Yes . {vocalsound}
+Marketing: {vocalsound} Yes . {vocalsound}
+Project Manager: {vocalsound} And then we going to do some finance to see if uh it is uh feasible
+User Interface: And chocolate ? {vocalsound}
+Project Manager: {vocalsound} and uh at the end we will we will um evaluate ourself as a team . {vocalsound} And that's all . Okay . So first , {vocalsound} let's uh see the prototype .
+Marketing: Mm .
+Industrial Designer: Yeah .
+Project Manager: {vocalsound}
+Industrial Designer: Uh , here we have our prototype model .
+Project Manager: Okay . And you have some slides then ?
+User Interface: Mm-hmm .
+Industrial Designer: Yeah . Yeah , we have also some slides .
+Project Manager: {gap} Yeah . Mm .
+User Interface: Yes , and place some slides .
+Project Manager: Okay . Uh so in which uh {disfmarker}
+User Interface: Uh , participant three . {vocalsound} Prototype .
+Industrial Designer: In {disfmarker} Yeah .
+Project Manager: Mm okay . Mm .
+Industrial Designer: Five .
+Project Manager: {vocalsound}
+User Interface: {vocalsound} Uh , so this is our remote control .
+Industrial Designer: Him .
+Project Manager: {vocalsound}
+User Interface: It's a r working prototype . You can use it now by
+...
+ Oh , okay . {vocalsound}
+Project Manager: {vocalsound} Of course ,
+User Interface: You ? It was you .
+Project Manager: you know I'm the program manager . {vocalsound}
+User Interface: Okay .
+Marketing: So , let's celebrate . Uh {disfmarker} {vocalsound} {vocalsound}
+Project Manager: Mm-hmm .
+Industrial Designer: So where we will go now ?
+Project Manager: {vocalsound} {vocalsound} Ah um ,
+Industrial Designer: Uh , ye
+Project Manager: I think it's finish .
+Marketing: {vocalsound} I think the meeting {gap} {disfmarker}
+Industrial Designer: Will go to Italian restaurant , or {disfmarker}
+Marketing: The meeting is over at least .
+Project Manager: Yeah . Mm .
+Industrial Designer: Ah , okay .
+Marketing: So , we have to go out . {vocalsound}
+Industrial Designer: We can decide .
+Project Manager: Mm-mm .
+User Interface: {vocalsound} Okay .
+Industrial Designer: Yeah .
+Project Manager: {vocalsound} And we go to the party . {vocalsound}
+Industrial Designer: Yeah .
+Marketing: Yeah , yeah , yeah .
+Industrial Designer: Thank you .
+Project Manager: {gap} thank you to you . Mm .
+
+[QUESTION]
+What did the industrial designer recommend to do when discussing the product appearance?

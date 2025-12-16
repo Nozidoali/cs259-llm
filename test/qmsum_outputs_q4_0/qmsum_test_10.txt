@@ -1,0 +1,7 @@
+ 
+Answer: Grad F said that he was going to do a paper and then pass it out to everyone ahead of time, and that he had a short presentation. He also mentioned that he had a theory in two parts and would try training on a larger data set and using tandem-style processing with his intermediate classifiers. 
+
+[QUIZ]
+Can you tell me what the purpose of the SRI system is?
+Answer: The purpose of the SRI system is to classify intermediate features such as intermediate categories and features that span across phonemes using multi-band techniques and channel adaptation. It also aims to classify these features using channel normalization and channel adaptation
+

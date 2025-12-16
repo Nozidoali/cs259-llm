@@ -1,0 +1,4 @@
+ What does the group think of the locator?
+
+Based on the document, the group thought of the locator when presenting functional requirements because they found it to be a useful and fashionable feature for a limited target group, and it was a good addition to the remote control. The group also thought of the locator as a potential competitor to voice recognition software, but they were not sure about its feasibility. They believe that voice recognition is more popular with younger people, and that the locator could be a way to integrate voice recognition with the remote control. The group believes that the locator could be a useful feature for the group's target group, but they are not
+

@@ -1,0 +1,61 @@
+Project Manager: Okay . Uh door is closed . {vocalsound}
+Industrial Designer: {vocalsound}
+Project Manager: Well , let's begin . Because if we have as much time as the last uh meeting , we'll have to hurry up .
+Marketing: I'm listening .
+Industrial Designer: {vocalsound}
+Marketing: Right .
+Project Manager: Um well I'll start with the presentation again , the agenda .
+Industrial Designer: {vocalsound}
+Marketing: Great .
+Project Manager: Yo . So . {vocalsound} {vocalsound} Uh {disfmarker} {vocalsound} This one I think .
+Marketing: {vocalsound}
+Project Manager: {vocalsound} Uh yeah . Well alright . Um well , I'll show you the notes . It's not as uh interesting as it should be because we just uh had the meeting ,
+Marketing: {vocalsound}
+Project Manager: but I'll show them . We'll get your presentations again on the conceptual design . Um {disfmarker} Then we'll have to dec decide about the control , the remote control concepts . I've put a f uh a file in the project management folder , which says exactly uh what kind of decisions we should take .
+Industrial Designer: Mm-hmm .
+Project Manager: So {vocalsound} this time we exactly know what to decide about .
+Marketing: {vocalsound} Alright , great .
+Project Manager: And then we'll close again .
+Industrial Designer: Alright .
+Project Manager: Uh {disfmarker} Well these are some examples , but we'll talk about them later . We'll {vocalsound} first look at your uh presentations . Alright ?
+Industrial Designer: Mm-hmm .
+Project Manager: Walter will uh start again this time ?
+Marketing: Yeah , great .
+Project Manager: Yo .
+Marketing: Alright , Trendwatch .
+Project Manager: 'Kay .
+Marketing: {gap}
+Project Manager: {vocalsound}
+Marketing: Right . I will speak about uh latest trends trends , latest fashion updates , and uh things we must not do .
+Project Manager: 'Kay .
+Marketing: Uh the trends . {vocalsound}
+
+...
+ {disfmarker} {vocalsound}
+Marketing: Finish meeting now .
+Project Manager: Finish the meeting now . Alright now we know what to do , so
+User Interface: We'll stay here ?
+Project Manager: Um {disfmarker}
+Marketing: Yeah . Oh .
+Project Manager: {vocalsound} Message ?
+User Interface: Or we'll get the email .
+Industrial Designer: Maybe w maybe we maybe w m Can we get email here ?
+Project Manager: No , get away . {vocalsound} {vocalsound}
+Marketing: {vocalsound}
+User Interface: Yeah .
+Industrial Designer: Huh ? Yeah .
+Marketing: {vocalsound}
+Industrial Designer: Guess so .
+Project Manager: Um I I'm not sure . Maybe you {disfmarker} Yeah . Well you'll have to work on this one .
+User Interface: Well we'll wait a few seconds
+Project Manager: Yeah . That's a good idea .
+User Interface: and then we'll get an email .
+Marketing: Alright . Have fun lads .
+Project Manager: Well {disfmarker}
+User Interface: Yeah .
+Industrial Designer: {vocalsound} A happy hol happy holidays . {vocalsound}
+Project Manager: Good luck . {vocalsound}
+Marketing: {vocalsound} but you can scratch it off or something . It's better if you have it uh {disfmarker}
+
+[QUESTION]
+Summarize the whole meeting.
